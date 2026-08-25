@@ -1,6 +1,7 @@
 /** node cli.js [i] [m] [n] [--cell=26] [--tiles=3] [--out=out] */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { Q, layout, findArcCrossings, renderDiagram, renderUniversalCover } from './src/index.js';
+import { Q, layout, findArcCrossings, renderDiagram, renderUniversalCover,
+         diagramToCSV } from './src/index.js';
 
 const positional = process.argv.slice(2).filter((a) => !a.startsWith('--')).map(Number);
 const flag = (name, fallback) => {
@@ -18,6 +19,7 @@ const crossings = findArcCrossings(drawn);
 
 mkdirSync(dir, { recursive: true });
 const stem = `Q${i}${m}${n}`;
+writeFileSync(`${dir}/${stem}.csv`, diagramToCSV(diagram, { cell }));
 writeFileSync(`${dir}/${stem}.svg`, renderDiagram(drawn));
 writeFileSync(`${dir}/${stem}-cover.svg`, renderUniversalCover(layout(diagram, { cell: Math.max(10, cell * 0.62) }), { tiles }));
 
@@ -27,4 +29,4 @@ console.log(`  ${diagram.xCount} x-generators, ${diagram.yCount} y-generators, $
 console.log(`  dependent strands: ${dependentStrands} (m+n-2)`);
 console.log(`  beta components: ${diagram.components().length}`);
 console.log(`  drawn arc crossings: ${crossings.length}`);
-console.log(`  ${dir}/${stem}.svg   ${dir}/${stem}-cover.svg`);
+console.log(`  ${dir}/${stem}.csv   ${dir}/${stem}.svg   ${dir}/${stem}-cover.svg`);

@@ -3,7 +3,8 @@ import {
   Q, parameters, layout, findArcCrossings, renderDiagram, renderUniversalCover,
   liftBeta, subTrack, tileExtent, scaling, gridSettingsFor, closestApproach,
   enumerateDiscs, reebChords, chordWord, REEB_CONVENTIONS, toCSV,
-  conjecturedArrows, conjecturedCount, discAtlas, packIntoSlots
+  conjecturedArrows, conjecturedCount, discAtlas, packIntoSlots,
+  diagramToCSV, diagramFromCSV, discsToCSV, discsFromCSV, DIAGRAM_FORMAT
 } from '../src/index.js';
 import { boundingBox } from '../../grid-arc/src/geometry.js';
 import { ArcDescriptionBuilder, describeArc } from '../../grid-arc/src/index.js';
@@ -306,6 +307,51 @@ console.log('\n  the Heegaard-aware engine agrees with the generic one');
           `${generic.discs.length} vs ${fast.discs.length}`);
     check(`Q(${params}): and try the same number of pieces`, generic.tried === fast.tried);
   }
+}
+
+console.log('\n  the file formats');
+{
+  for (const params of [[1, 2, 2], [2, 2, 2], [2, 3, 5], [1, 5, 5]]) {
+    const original = Q(...params);
+    const { diagram } = diagramFromCSV(diagramToCSV(original, { cell: 26 }));
+    const label = `Q(${params})`;
+    check(`${label}: arcs survive the round trip`,
+          JSON.stringify(original.arcs) === JSON.stringify(diagram.arcs));
+    check(`${label}: counts and basepoints survive`,
+          original.xCount === diagram.xCount && original.yCount === diagram.yCount &&
+          JSON.stringify(original.basepoints) === JSON.stringify(diagram.basepoints));
+    check(`${label}: the reloaded diagram bounds the same discs`,
+          enumerateDiscs(diagram).discs.length === enumerateDiscs(original).discs.length);
+  }
+
+  const text = diagramToCSV(Q(2, 2, 2));
+  check('the header names the format', text.startsWith(`# ${DIAGRAM_FORMAT}`));
+  check('every metadata line is a comment',
+        text.split('\n').filter((l) => l && !l.startsWith('#'))
+            .every((l) => l.split(',').length === 5));
+  check('no field needs quoting', !text.includes('"'));
+  check('counts are inferred when not stated',
+        diagramFromCSV(text.split('\n').filter((l) => !l.startsWith('# x-generators'))
+          .join('\n')).diagram.xCount === 30);
+
+  const refuses = (bad, why) => {
+    let threw = false;
+    try { diagramFromCSV(bad); } catch { threw = true; }
+    check(`a file with ${why} is refused`, threw);
+  };
+  refuses('# heegaard-diagram 99\nside_a,index_a,side_b,index_b\ntop,0,bottom,0\n', 'the wrong version');
+  refuses(`# ${DIAGRAM_FORMAT}\nside_a,index_a,side_b,index_b\nsideways,0,bottom,0\n`, 'a bad side');
+  refuses(`# ${DIAGRAM_FORMAT}\nside_a,index_a,side_b,index_b\ntop,0,bottom,1\n`, 'arcs that do not close up');
+
+  const discs = enumerateDiscs(Q(2, 2, 2)).discs;
+  const back = discsFromCSV(discsToCSV(discs, { diagram: Q(2, 2, 2) })).discs;
+  check('the disc list round trips', back.length === discs.length);
+  const withChords = back.find((d) => d.chords.length);
+  check('chords are parsed back into rho names',
+        withChords && withChords.chords.every((c) => c.startsWith('rho_')),
+        JSON.stringify(withChords?.chords));
+  check('U powers and paths survive',
+        back.every((d) => Number.isInteger(d.U) && Array.isArray(d.directions)));
 }
 
 console.log('\n  the disc atlas');

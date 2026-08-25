@@ -21,3 +21,7 @@ export {
 } from './discs.js';
 export { conjecturedArrows, conjecturedCount, annotation } from './conjectured.js';
 export { discAtlas, packIntoSlots, sampleDiscs } from './atlas.js';
+export {
+  diagramToCSV, diagramFromCSV, discsToCSV, discsFromCSV, DIAGRAM_FORMAT, DISCS_FORMAT
+} from './format.js';
+export { tabulate, PieceBuilder } from './fast.js';
