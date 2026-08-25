@@ -363,7 +363,13 @@ amortised and the whole enumeration `O(C^2)` rather than `O(C^3)`. Not done.
 
 ## The atlas
 
-`node atlas.js 2 2 2` draws every disc at once. A disc translated by a lattice vector is
+`node atlas.js 2 2 2` draws every disc at once, and writes a PNG beside the SVG when
+Inkscape is installed (`--no-png` to skip, `--dpi=110` to change the size). PNG rather than
+JPEG on purpose: these are line drawings, and on these very files JPEG at quality 92 came out
+two to three times *larger* than PNG as well as lossier, because a DCT codec spends its bits
+on ringing around every grid line. Nothing else in the package shells out, and nothing
+depends on it working — without Inkscape you still get the SVG and a line saying why there is
+no PNG. A disc translated by a lattice vector is
 another lift of the same disc, so the picture stays honest whichever copy each one is drawn
 in — which is what makes a catalogue possible. Left where the enumeration found them they sit
 on top of one another, so by default each is slid into its own slot by a whole number of
