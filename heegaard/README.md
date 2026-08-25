@@ -245,6 +245,85 @@ of generators:
 
     C  =  (maxx + 1) + (maxy + 1)  =  2m(2i-1)(n+1) + 2m + 2n - 1  ~  4imn
 
+The enumeration tries every piece of beta from each generator, both ways, out to a full
+circuit: `2C^2` pieces, each costing more as it gets longer. Measured over 300 diagrams:
+
+    T  ~  2.2e-7 * C^2.68
+
+| diagram | generators | discs | time |
+|---|---|---|---|
+| Q(1,2,2) | 19 | 46 | 0.01 s |
+| Q(2,2,2) | 43 | 110 | 0.02 s |
+| Q(2,3,5) | 123 | 502 | 0.14 s |
+| Q(2,5,5) | 199 | 830 | 0.43 s |
+| Q(3,5,5) | 319 | 1,320 | 1.1 s |
+| Q(2,10,10) | 699 | 4,710 | 9.3 s |
+| Q(3,10,9) | 1,037 | 6,401 | 26.1 s |
+| Q(10,10,10) | 4,219 | 27,750 | 20.4 min |
+
+About 1.8 ms per disc at the sizes above — but that figure is not stable, because finding a
+disc is not what costs. Ruling out the pieces that are *not* discs is: only a few percent of
+the `2C^2` pieces bound one, so time grows like `C^2.68` while the disc count grows roughly
+like `C`, and cost per disc grows like `C^1.7` — 180 microseconds at `Q(2,2,2)`, 44 ms at
+`Q(10,10,10)`.
+
+**A warning about extrapolating this.** Fitted on diagrams up to `C = 475` the exponent comes
+out at 2.27; out at `C = 4219` it is really 2.68. Predicting `Q(10,10,10)` from the small end
+gave 8.5 minutes against an actual 20.4. The residual per-piece work grows with `C`, so the
+exponent drifts upward and a fit from below always runs low.
+
+Four changes account for the constant, in the order they mattered:
+
+1. **The self-intersection test**, the only quadratic step inside a single solve — 10.8 ms of
+   an 11.9 ms solve on a thousand-point piece. Beta's lift is embedded by construction, so it
+   is skipped (`assumeSimple`). About 8x.
+2. **Sampling.** An arc is a primitive, not a polyline; the enumeration samples parabolas at 4
+   rather than 48, with the disc lists identical at every sampling from 48 down to 2. About 4x.
+3. **Validating beta once.** Every check in §2 is a property of the curve, not of the piece,
+   so the lifted track is checked once and the `2C^2` solves pass `assumeValid`. About 3x.
+4. **Extending rather than rebuilding** the arc description, plus indexing crossings by edge
+   and deferring the shielding context. About 8x, and it took the exponent from 3 to 2.68.
+
+End to end that is roughly 140x: `Q(10,10,10)` began at an estimated 47 hours.
+
+### Q(i,2,2) against the closed-form tables
+
+`src/conjectured.js` transcribes the predicted arrows — 14 special, a snail of `12i-7`, and
+`52i-25` in families, so `64i-18` in all. `node test/compare-conjecture.js 4` compares them
+against the computed discs, row for row, where a row is (source, target, U, chord word):
+
+| i | discs | `64i-18` | rows matching | time |
+|---|---|---|---|---|
+| 1 | 46 | 46 | 46 / 46 | 0.0 s |
+| 2 | 110 | 110 | 110 / 110 | 0.1 s |
+| 3 | 174 | 174 | 174 / 174 | 0.2 s |
+| 4 | 238 | 238 | 238 / 238 | 0.6 s |
+| 5 | 302 | 302 | 302 / 302 | 1.1 s |
+| 6 | 366 | 366 | 366 / 366 | 1.8 s |
+| 7 | 430 | 430 | 430 / 430 | 2.9 s |
+| 8 | 494 | 494 | 494 / 494 | 4.3 s |
+| 9 | 558 | 558 | 558 / 558 | 6.1 s |
+| 10 | 622 | 622 | 622 / 622 | 8.2 s |
+
+3340 arrows over the ten cases, every one of them agreeing. Nothing is normalised away in
+the comparison: the two lists have to match as multisets, row for row, including the U power
+and the order of the chords.
+
+### The older CSV
+
+`reference_Q222.csv` in `dependent-region-shur` agrees on 107 of 110 rows. The three it
+differs on are single-step discs out of the snail's `0 <= k <= i-2` families, where it has
+`x_10 -> x_11`, `x_9 -> x_12`, `y_8 -> y_9` and both the computation and the closed-form
+tables have them the other way round. It is superseded; `node test/compare-reference.js` is
+kept only so the difference stays visible.
+
+### How long it takes
+
+Everything is governed by one number, the length of beta's circuit, which is also the number
+of generators:
+
+    C  =  (maxx + 1) + (maxy + 1)  =  2m(2i-1)(n+1) + 2m + 2n - 1  ~  4imn
+
 The enumeration runs from each of the `C` generators, both ways, out to a full circuit, so it
 solves `2C^2` pieces of beta; and a piece of length `L` costs time proportional to `L`, with
 an average of `C/2`. So
@@ -317,6 +396,15 @@ clicked then that is what you meant.
 **Scan** solves every piece within `scan range` of the current start and lists the ones that
 bound a disc, each clickable. That is the disc count for that generator, and it is what the
 whole thing is for.
+
+## What is next
+
+**The solver should work on any H(r,s), not only the ones that come from Q(i,m,n).**
+Everything below `Q()` is already general — `HeegaardDiagram` takes an arbitrary arc list,
+`validate` checks it, and `layout`, `liftBeta` and `enumerateDiscs` never ask where a diagram
+came from. What is missing is the way in: a constructor for a general H(r,s), and a check
+that the straight-segment drawing rule still gives an embedded picture outside the Q family
+(`findArcCrossings` will say so rather than draw it wrong). Not started.
 
 ## Open questions
 

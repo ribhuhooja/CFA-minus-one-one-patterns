@@ -66,5 +66,15 @@ npm run stress                      # the uniqueness study
 ## Where it stands
 
 For `Q(i,2,2)` the computed discs match the closed-form arrow tables exactly — every row,
-including the U powers and the order of the Reeb chords. Nothing yet assembles the discs
-into the algebra; that is the next thing.
+including the U powers and the order of the Reeb chords, for i = 1 to 10.
+
+Speed, for a sense of scale: `Q(2,3,5)` is 502 discs in 0.14 s, `Q(3,10,9)` is 6,401 discs in
+26 s, `Q(10,10,10)` is 27,750 discs in 20 minutes. See `heegaard/README.md` for the scaling
+law and for why extrapolating it from small diagrams runs low.
+
+Two things not done:
+
+- **Any H(r,s), not just Q(i,m,n).** Everything below `Q()` is already general; what is
+  missing is a constructor for an arbitrary H(r,s). This is the main one.
+- **Assembling discs into the algebra.** The disc lists are produced; nothing yet turns them
+  into CFA^-.
