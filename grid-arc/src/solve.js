@@ -55,6 +55,7 @@ const DEFAULTS = {
   grid: undefined,      // override the grid constants (see gridSettings); undefined = defaults
   assumeSimple: false,  // skip the quadratic self-intersection test; see validateArc
   assumeValid: false,   // skip §2 entirely -- only for a sub-arc of an already-checked curve
+  description: undefined, // a prebuilt ArcDescription, e.g. from an ArcDescriptionBuilder
   searchSpace: 'cells', // 'bbox' widens it, to test the §6 lemma
   bboxPad: 2,
   maxPathLength: undefined
@@ -67,8 +68,8 @@ const DEFAULTS = {
  */
 export function solve(arc, options = {}) {
   const opts = { ...DEFAULTS, ...options };
-  const points = arc.map((p) => [p[0], p[1]]);
-  const description = describeArc(points, opts);
+  const description = opts.description ?? describeArc(arc.map((p) => [p[0], p[1]]), opts);
+  const points = description.arc;
 
   const result = {
     status: 'invalid', reason: null, problems: description.problems,
@@ -80,15 +81,21 @@ export function solve(arc, options = {}) {
   const endpoints = endpointConditions(points);
   result.endpoints = endpoints;
 
-  const ctx = shieldingContext(description);
+  // Building this walks every sub-arc, so leave it until something is actually going to be
+  // searched: four fifths of all solves stop at the blocked-partial-edge test below.
+  let shielding = null;
+  const ctx = () => (shielding ??= shieldingContext(description));
   const ruleOptions = { strict: opts.strictRule };
   const spans = partialEdgeSpans(endpoints);
   const { crossings } = description;
 
   // §5: either forced partial edge being crossed rules out the general search.  It does not
   // rule out the same-edge candidate below, where x_e is itself the "blocking" crossing.
-  const blockedStart = crossingStrictlyBetween(endpoints.edgeS, ...spans.start, crossings);
-  const blockedEnd = crossingStrictlyBetween(endpoints.edgeE, ...spans.end, crossings);
+  // only the crossings on that one edge can possibly lie inside the span
+  const onEdgeS = description.crossingsByEdge?.get(endpoints.edgeS) ?? crossings;
+  const onEdgeE = description.crossingsByEdge?.get(endpoints.edgeE) ?? crossings;
+  const blockedStart = crossingStrictlyBetween(endpoints.edgeS, ...spans.start, onEdgeS);
+  const blockedEnd = crossingStrictlyBetween(endpoints.edgeE, ...spans.end, onEdgeE);
   if (blockedStart || blockedEnd) {
     result.blocker = blockedStart ?? blockedEnd;
     result.reason = blockedStart
@@ -96,11 +103,12 @@ export function solve(arc, options = {}) {
       : `the forced final partial edge (v_e → x_e, ${endpoints.last}) is crossed by the arc`;
   }
 
-  const candidates = [...degenerateCandidates(endpoints, spans, crossings)];
+  const candidates = [...degenerateCandidates(endpoints, spans, onEdgeS)];
 
   let searchStats = { steps: 0, truncated: false };
   if (!blockedStart && !blockedEnd && latticeKey(endpoints.vs) !== latticeKey(endpoints.ve)) {
-    const shared = { ctx, ruleOptions, recordDecisions: opts.decisions, maxPathLength: opts.maxPathLength };
+    const shared = { ctx: ctx(), ruleOptions, recordDecisions: opts.decisions,
+                     maxPathLength: opts.maxPathLength };
 
     if (opts.strategy === 'walk' || opts.strategy === 'verify') {
       const walk = walkPath(description, endpoints, shared);
@@ -160,7 +168,7 @@ export function solve(arc, options = {}) {
  * The two shapes §5 singles out, neither of which involves a search.  Both are validated
  * against (P1)-(P4) like any other candidate.
  */
-function* degenerateCandidates(endpoints, spans, crossings) {
+function* degenerateCandidates(endpoints, spans, onStartEdge) {
   const { xs, xe, vs, ve, edgeS, edgeE, first } = endpoints;
 
   // x_s and x_e on the same edge, with the forced direction pointing from one to the other
@@ -170,7 +178,7 @@ function* degenerateCandidates(endpoints, spans, crossings) {
     const forward = (first === 'E' || first === 'N') ? 1 : -1;
     const noLatticeBetween = Math.floor(Math.min(tStart, tEnd)) === Math.floor(Math.max(tStart, tEnd));
     if ((tEnd - tStart) * forward > 0 && noLatticeBetween &&
-        !crossingStrictlyBetween(edgeS, tStart, tEnd, crossings))
+        !crossingStrictlyBetween(edgeS, tStart, tEnd, onStartEdge))
       yield { points: [xs, xe], kind: 'same-edge', decisions: [] };
   }
 

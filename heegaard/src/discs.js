@@ -36,6 +36,13 @@
  * the track is checked once, the nodes are checked once, and the 2C^2 solves that follow skip
  * §2 entirely.  Re-validating the same curve for every piece was three quarters of the work.
  *
+ * EXTENDING RATHER THAN REBUILDING.  From one generator the enumeration wants the pieces of
+ * length 1, 2, 3, ... in turn, and each is the previous one plus an arc -- so an
+ * `ArcDescriptionBuilder` is fed one arc at a time instead of the whole piece being described
+ * from scratch each round.  Both directions grow at the piece's own end (going backwards, the
+ * piece is the reverse of a run of arcs, so extending it prepends an arc to the run and
+ * therefore appends to the reversal), which is what lets a plain append serve for both.
+ *
  * THE POWER OF U is how often the domain covers the basepoint w, which sits shut inside the
  * innermost rainbow.  On the torus that is a multiplicity; in the universal cover, where the
  * solver works, it is simply the number of lifts of w that the region encloses.  The
@@ -43,7 +50,7 @@
  * that covers it.
  */
 import { boundingBox, windingNumber } from '../../grid-arc/src/geometry.js';
-import { solve, validateArc, edgeContaining } from '../../grid-arc/src/index.js';
+import { solve, validateArc, edgeContaining, ArcDescriptionBuilder } from '../../grid-arc/src/index.js';
 import { layout } from './layout.js';
 import { liftBeta, subTrack, tileExtent } from './track.js';
 import { scaling, gridSettingsFor } from './bridge.js';
@@ -152,33 +159,38 @@ export function enumerateDiscs(diagram, options = {}) {
       throw new Error(`${diagram.name}: generator ${node.generator} does not lie in the interior ` +
         'of a grid edge, so pieces ending there cannot skip validation');
 
+  // normalise every arc of the track once, rather than once per piece that contains it
+  const gridSegments = track.segments.map((points) => scale.pathToGrid(points));
+  const reversed = gridSegments.map((points) => [...points].reverse());
+
   const discs = [];
   let tried = 0;
   for (let start = circuit; start < 2 * circuit; start++) {
-    for (let offset = -circuit; offset <= circuit; offset++) {
-      if (offset === 0) continue;
-      const piece = subTrack(track, start, start + offset);
-      if (!piece) continue;
-      tried++;
-      // beta is embedded on the torus, so its lift is embedded in the cover and every piece
-      // of it is simple; the solver's quadratic check for that is pure cost here.
-      const result = solve(scale.pathToGrid(piece),
-                           { grid: settings, strategy, assumeValid: true });
-      if (result.status !== 'solved') continue;
-      for (const solution of result.solutions) {
-        const chords = reebChords(solution.directions, convention);
-        discs.push({
-          source: track.nodes[start].generator,
-          target: track.nodes[start + offset].generator,
-          offset,
-          directions: solution.directions,
-          chords,
-          word: chordWord(chords),
-          wordReversed: chordWord([...chords].reverse()),
-          U: multiplicity(solution.region.polygon, w),
-          area: solution.region.area,
-          ...(keepRegions ? { polygon: solution.region.polygon } : {})
-        });
+    for (const direction of [1, -1]) {
+      const builder = new ArcDescriptionBuilder(settings);
+      for (let step = 1; step <= circuit; step++) {
+        const offset = direction * step;
+        const segment = direction > 0 ? start + step - 1 : start - step;
+        if (segment < 0 || segment >= gridSegments.length) break;
+        builder.append(direction > 0 ? gridSegments[segment] : reversed[segment]);
+        tried++;
+        const result = solve(builder.arc, { description: builder.description, strategy });
+        if (result.status !== 'solved') continue;
+        for (const solution of result.solutions) {
+          const chords = reebChords(solution.directions, convention);
+          discs.push({
+            source: track.nodes[start].generator,
+            target: track.nodes[start + offset].generator,
+            offset,
+            directions: solution.directions,
+            chords,
+            word: chordWord(chords),
+            wordReversed: chordWord([...chords].reverse()),
+            U: multiplicity(solution.region.polygon, w),
+            area: solution.region.area,
+            ...(keepRegions ? { polygon: solution.region.polygon } : {})
+          });
+        }
       }
     }
     onProgress?.(start - circuit + 1, circuit);

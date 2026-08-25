@@ -18,6 +18,7 @@ export { solve } from './solve.js';
 
 // the arc, before any path search
 export { validateArc, findCrossings, decomposeIntoCells, describeArc } from './arc.js';
+export { ArcDescriptionBuilder } from './incremental.js';
 
 // what the arc's orientation forces at its ends
 export {

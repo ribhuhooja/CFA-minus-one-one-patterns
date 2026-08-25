@@ -83,6 +83,7 @@ Instrumentation is off by default, so a batch run allocates nothing it does not 
 | `src/constraints.js` | (P1)–(P4), each exported separately. |
 | `src/search.js` | `enumeratePaths` (DFS) and `walkPath` (the local walk). Neither decides anything. |
 | `src/solve.js` | the orchestrator. |
+| `src/incremental.js` | `ArcDescriptionBuilder`: the same description, built by extending rather than from scratch. |
 | `src/index.js` | the public surface. |
 | `src/random.js` | random valid arcs, for fuzzing. |
 | `src/examples.js` | the built-in curves. |
@@ -191,6 +192,30 @@ One scope note worth keeping in mind, since it bit the first implementation: the
 table governs steps *between lattice points*. It does not govern the first partial edge
 (`x_s → v_s`) or the final one (`v_e → x_e`) — both are fixed by §5 instead, and either may
 legitimately run `S` or `W`. A first partial edge of `S` or `W` occurs in 1447 of 3342 solutions.
+
+## Solving every sub-arc of one curve
+
+Asking for the description of prefix after prefix of the same polyline — which is what disc
+counting does — costs `O(length)` each time, so `O(C^2)` for the `C` prefixes of a curve of
+`C` arcs, and each answer is the previous one plus a little. Everything `describeArc`
+computes is monotone under appending points: a crossing keeps its `segment` and `at`, because
+new points go on the *end*; the cells, blocked edges and candidate edges only grow.
+
+`ArcDescriptionBuilder` appends instead. The one thing not simply appended is the final
+crossing: `findCrossings` records the last point explicitly as `kind: 'end'`, and extending
+the arc turns that point into an ordinary crossing, which the half-open `[0,1)` rule then
+picks up again as `t = 0` of the first new segment. So the builder keeps the interior
+crossings and re-derives the end marker on demand.
+
+Descriptions also carry `crossingsByEdge`. A long arc crosses the grid thousands of times but
+over only a few dozen distinct edges, so "is anything on this edge, between here and there"
+is a lookup rather than a scan — which matters because that question decides **82%** of all
+solves: most pieces of a curve die on a blocked forced partial edge, before any search starts.
+For the same reason the shielding context is built on demand rather than up front.
+
+The builder is not cleverer than `describeArc`, just lazier. A test in `heegaard` checks the
+two agree exactly — crossings, cells, sub-arcs, blocked and candidate edges — over every
+prefix of four real curves in both directions.
 
 ## Findings from the stress test
 
