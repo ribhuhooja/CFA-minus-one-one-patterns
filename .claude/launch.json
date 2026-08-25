@@ -4,7 +4,7 @@
     {
       "name": "grid-arc",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["grid-arc/serve.js", "8123"],
+      "runtimeArgs": ["grid-arc-js/serve.js", "8123"],
       "port": 8123
     }
   ]

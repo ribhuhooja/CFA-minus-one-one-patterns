@@ -5,11 +5,13 @@ project is; this file is the state of play and the traps.
 
 ## Layout
 
-Two packages, no dependencies, no build step, plain ES modules.
+Three packages, no dependencies, no build step. Modules are quarantined by language.
 
 - **`grid-arc-js/`** — the geometry. Given a simple arc on the unit grid, find the grid path
   joining its endpoints whose enclosed region contains no forbidden point. Knows nothing about
   Heegaard diagrams.
+- **`heegaard-py/`** — the same, in Python: a `Diagram` class you build with `add_arc`, the
+  validator, `Q(i,m,n)`, and a solver. CSV in, CSV out.
 - **`heegaard-js/`** — the diagrams. Builds `Q(i,m,n)` as `H(r,s)`, draws it, lifts beta to the
   universal cover, feeds pieces of beta to the solver, reads off Reeb chords and U powers.
 
@@ -118,9 +120,12 @@ has the discs.
    Open questions the user has not settled: whether the diagram format carries geometry or
    only combinatorics (leaning combinatorics + an optional layout section), and how a
    generator is identified across files (currently `x_13` / `y_7`).
-2. **A Python package** that does the computation, ported from the step-0 solver once it is
-   proven. If step 0 gets the float out of the inner loop, Python's penalty largely evaporates;
-   measured penalty on the *current* float-heavy primitives is 26-45x versus JS.
+2. ~~**A Python package**~~ — **DONE**, `heegaard-py/`. Same algorithm, same answers, reads
+   and writes the same two CSV formats; disc lists agree with the JS exactly on every diagram
+   tried and `solve` emits a byte-identical CSV. About 9x slower than JS. Its layout does NOT
+   assume straight arcs: it routes as straight chords in a disc (which cannot cross when the
+   chord diagram does not interleave) and carries them back to the square, so it works on any
+   valid diagram.
 3. **Any `H(r,s)`, not just `Q(i,m,n)`.** Everything below `Q()` is already general; what is
    missing is a constructor and a check that the straight-segment drawing rule still gives an
    embedded picture off the Q family (`findArcCrossings` will report rather than draw wrong).
