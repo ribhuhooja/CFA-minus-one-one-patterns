@@ -13,8 +13,8 @@
  * So the tolerances are measured off the diagram instead of assumed, subject to the rule
  * that beta must never come closer to a lattice point than the forbidden point does.
  */
-import { distancePointSegment } from '../../grid-arc/src/geometry.js';
-import { gridSettings } from '../../grid-arc/src/grid.js';
+import { distancePointSegment } from '../../grid-arc-js/src/geometry.js';
+import { gridSettings } from '../../grid-arc-js/src/grid.js';
 
 /** Normalised <-> cover coordinates. */
 export function scaling(laidOut) {

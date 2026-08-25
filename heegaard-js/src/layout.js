@@ -35,7 +35,7 @@
  * reported as `epsilon` in units of the domain, so a cover of these domains is a unit grid
  * with a forbidden point at (k + epsilon, l + 1 - epsilon), which is the solver's convention.
  */
-import { intersectSegments } from '../../grid-arc/src/geometry.js';
+import { intersectSegments } from '../../grid-arc-js/src/geometry.js';
 import { GENERATOR_OF_SIDE, generatorName } from './diagram.js';
 
 export const DEFAULTS = { cell: 26, bulge: 0.45, samples: 16 };

@@ -6,10 +6,10 @@ import {
   conjecturedArrows, conjecturedCount, discAtlas, packIntoSlots,
   diagramToCSV, diagramFromCSV, discsToCSV, discsFromCSV, DIAGRAM_FORMAT
 } from '../src/index.js';
-import { boundingBox } from '../../grid-arc/src/geometry.js';
-import { ArcDescriptionBuilder, describeArc } from '../../grid-arc/src/index.js';
+import { boundingBox } from '../../grid-arc-js/src/geometry.js';
+import { ArcDescriptionBuilder, describeArc } from '../../grid-arc-js/src/index.js';
 import { HeegaardDiagram } from '../src/diagram.js';
-import { solve } from '../../grid-arc/src/index.js';
+import { solve } from '../../grid-arc-js/src/index.js';
 
 let passed = 0, failed = 0;
 const check = (name, ok, info) => {

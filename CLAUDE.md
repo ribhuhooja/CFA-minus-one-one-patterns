@@ -7,30 +7,30 @@ project is; this file is the state of play and the traps.
 
 Two packages, no dependencies, no build step, plain ES modules.
 
-- **`grid-arc/`** — the geometry. Given a simple arc on the unit grid, find the grid path
+- **`grid-arc-js/`** — the geometry. Given a simple arc on the unit grid, find the grid path
   joining its endpoints whose enclosed region contains no forbidden point. Knows nothing about
   Heegaard diagrams.
-- **`heegaard/`** — the diagrams. Builds `Q(i,m,n)` as `H(r,s)`, draws it, lifts beta to the
+- **`heegaard-js/`** — the diagrams. Builds `Q(i,m,n)` as `H(r,s)`, draws it, lifts beta to the
   universal cover, feeds pieces of beta to the solver, reads off Reeb chords and U powers.
 
 `src/` in both is pure: no DOM, no Node builtins, no I/O. `index.html` (the viewers) and the
 CLIs are the only impure things. **Verified**: `src/` imports nothing but its own siblings.
 
-Gitignored on purpose: `out/` (all regenerable), and `heegaard/{harvest,analyse,shapes}.js`,
+Gitignored on purpose: `out/` (all regenerable), and `heegaard-js/{harvest,analyse,shapes}.js`,
 which are one-off study code — the package is meant to be a package for computing CFAs.
 
 ## Running things
 
 ```bash
-cd heegaard
+cd heegaard-js
 node discs.js 2 3 5                  # count discs -> out/Q235-discs.csv
 node cli.js 2 2 2                    # draw diagram + universal cover (svg)
 node atlas.js 2 2 2 --cell=9         # draw a sample of the discs (svg + png)
-node serve.js                        # http://localhost:8300/heegaard/ interactive disc finder
+node serve.js                        # http://localhost:8300/heegaard-js/ interactive disc finder
 npm test                             # 347 tests
 npm run regression                   # ten diagrams against a pinned fixture, ~3s
 npm run conjecture                   # Q(i,2,2) vs the closed-form tables, i=1..10
-cd ../grid-arc && npm test && npm run stress
+cd ../grid-arc-js && npm test && npm run stress
 ```
 
 ## What is established
@@ -44,7 +44,7 @@ Do not rely on these in the solver. This is the data that we have found.
   is linear in i; 72% do not depend on i at all. Exactly three classes are empty at i=1
   (`rho_3`, `rho_23`, `rho_123`, each U^1).
 - A general-`(i,m,n)` family table covering **83.6%** of discs with **zero false positives**
-  lives in `heegaard/shapes.js` as executable code. The gap is the x-side "snail" — chordless
+  lives in `heegaard-js/shapes.js` as executable code. The gap is the x-side "snail" — chordless
   U^1 x->x discs. Known about it: it is the y-snail pattern repeated with period `2r-1`; the
   per-band repeat counts are what is missing.
 - The user's `snail_start`/`snail_end` conjecture (`U^m` chordless and `U^n rho_23` between
@@ -78,13 +78,13 @@ Do not rely on these in the solver. This is the data that we have found.
 
 ## Data on disk
 
-`heegaard/out/harvest/` — 646 diagrams, 1,385,280 discs, 47 MB, ~69 min to regenerate with
+`heegaard-js/out/harvest/` — 646 diagrams, 1,385,280 discs, 47 MB, ~69 min to regenerate with
 `node harvest.js`. Untracked. `summary.csv` has one row per diagram; `discs/Q<i>-<m>-<n>.csv`
 has the discs.
 
 ## What is next, in the order the user wants it
 
-0. ~~**A Heegaard-aware JS solver**~~ — **DONE**, `heegaard/src/fast.js`, default engine.
+0. ~~**A Heegaard-aware JS solver**~~ — **DONE**, `heegaard-js/src/fast.js`, default engine.
    Worth 2.2x (less than hoped: the incremental builder had already amortised crossing
    detection away). The real gain is that the inner loop now has no geometry in it, which is
    what makes a port to a slower language reasonable. `engine: 'generic'` keeps the old path

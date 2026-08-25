@@ -6,19 +6,19 @@ Bordered Heegaard diagrams on the torus, and the `Q(i, m, n)` family as `H(r, s)
 node discs.js 2 2 2                    # count every disc -> out/Q222-discs.csv
 node cli.js 2 2 2                      # draw it -> out/Q222.svg and out/Q222-cover.svg
 node atlas.js 2 2 2 --cell=9           # draw every disc at once -> out/Q222-atlas.svg
-node serve.js                          # poke at it by hand, http://localhost:8300/heegaard/
+node serve.js                          # poke at it by hand, http://localhost:8300/heegaard-js/
 node discs.js 2 2 2 --format=reference  # ... in the reference tables' own layout
 node test/compare-conjecture.js 4      # check Q(i,2,2) against the closed-form tables
 node test/compare-reference.js 2 2 2   # ... and against reference_Q222.csv
 npm test
 ```
 
-Counting is headless. `discs.js` imports `src/` and `../grid-arc/src/` and never touches a
+Counting is headless. `discs.js` imports `src/` and `../grid-arc-js/src/` and never touches a
 DOM; the viewer is one more consumer of the same functions, not a layer anything goes
 through.
 
 ```js
-import { Q, layout, renderDiagram, renderUniversalCover } from './heegaard/src/index.js';
+import { Q, layout, renderDiagram, renderUniversalCover } from './heegaard-js/src/index.js';
 const diagram = Q(2, 2, 2);            // H(r=7, s=14), validated on construction
 diagram.components();                  // beta traced through the gluings
 renderDiagram(layout(diagram, { cell: 26 }));
@@ -401,7 +401,7 @@ between an 82 KB file and a 1.7 MB one.
 
 ## The disc finder
 
-`node serve.js`, then <http://localhost:8300/heegaard/>.
+`node serve.js`, then <http://localhost:8300/heegaard-js/>.
 
 Click the start, then click the end. Both snap to the nearest generator, and the blue curve
 is the piece of beta between them; the second click solves and draws the red path and the

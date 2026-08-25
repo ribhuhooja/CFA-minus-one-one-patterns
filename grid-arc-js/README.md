@@ -19,7 +19,7 @@ Everything under `src/` is a pure ES module: no DOM, no globals, no I/O, mathema
 coordinates throughout (`y` increases upward — any flip belongs to a rendering layer).
 
 ```js
-import { solve } from './grid-arc/src/index.js';
+import { solve } from './grid-arc-js/src/index.js';
 
 const result = solve([[5.4, 5], [5.6, 5.5], [5.4, 6]], { strategy: 'walk' });
 result.status;                       // 'solved' | 'no-solution' | 'invalid'
@@ -66,7 +66,7 @@ Heegaard diagram lives at a different scale and passes far closer to the lattice
 a mouse stroke ever does, so it needs its own tolerances. `gridSettings` enforces the one
 rule that must hold whatever the numbers: `epsForbidden * sqrt(2) < minLatticeDistance`, i.e.
 the arc never comes closer to a lattice point than that point's own forbidden point does.
-See `../heegaard/src/bridge.js` for a caller that measures both off its diagram.
+See `../heegaard-js/src/bridge.js` for a caller that measures both off its diagram.
 
 Instrumentation is off by default, so a batch run allocates nothing it does not need:
 `solve` costs about 20 µs per arc under the default `'walk'`, 45 µs under `'search'`.

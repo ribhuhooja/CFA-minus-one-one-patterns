@@ -49,8 +49,8 @@
  * basepoint z is the one that may never be covered, and the solver already refuses any path
  * that covers it.
  */
-import { boundingBox, windingNumber } from '../../grid-arc/src/geometry.js';
-import { solve, validateArc, edgeContaining, ArcDescriptionBuilder } from '../../grid-arc/src/index.js';
+import { boundingBox, windingNumber } from '../../grid-arc-js/src/geometry.js';
+import { solve, validateArc, edgeContaining, ArcDescriptionBuilder } from '../../grid-arc-js/src/index.js';
 import { tabulate, PieceBuilder } from './fast.js';
 import { layout } from './layout.js';
 import { liftBeta, subTrack, tileExtent } from './track.js';

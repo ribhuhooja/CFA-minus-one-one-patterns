@@ -10,7 +10,7 @@
  * Colours mean nothing; they are there so that two discs lying close together can be told
  * apart, and are assigned greedily so neighbours differ.
  */
-import { boundingBox } from '../../grid-arc/src/geometry.js';
+import { boundingBox } from '../../grid-arc-js/src/geometry.js';
 
 /** Enough hues to keep neighbours apart; nothing is meant by any particular one. */
 const PALETTE = [
