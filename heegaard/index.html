@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beta arcs on the universal cover</title>
+<style>
+  :root{
+    --bg:#fbfaf8; --ink:#1d1a17; --muted:#6b645d; --rule:#ddd6cd;
+    --grid:#f0b9b9; --beta:#7ea6ec; --pick:#1a4fd6; --path:#a11212;
+    --ok:#1a7f37; --bad:#b3261e; --warn:#a06a00;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);overflow:hidden;
+       font:13px/1.5 ui-sans-serif,-apple-system,"SF Pro Text",Segoe UI,system-ui,sans-serif}
+  #app{display:flex;height:100%}
+  #left{flex:1 1 auto;min-width:0;position:relative;background:#fff;border-right:1px solid var(--rule)}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #hud{position:absolute;left:12px;top:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+       background:rgba(255,255,255,.92);border:1px solid var(--rule);border-radius:6px;padding:5px 7px}
+  #tip{position:absolute;left:12px;bottom:10px;right:12px;color:var(--muted);font-size:12px;
+       pointer-events:none;text-shadow:0 0 4px #fff,0 0 8px #fff}
+  #right{flex:0 0 400px;overflow:auto;padding:14px 14px 40px}
+  h1{font-size:14px;margin:0 0 10px;font-weight:600}
+  h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:16px 0 6px;font-weight:600}
+  .row{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  button,select,input{font:inherit;font-size:12px;padding:3px 7px;border:1px solid var(--rule);
+                      border-radius:4px;background:#fff;color:var(--ink)}
+  button{cursor:pointer}
+  button:hover{background:#f2eee9}
+  input[type=number]{width:56px}
+  label.tg{display:inline-flex;gap:5px;align-items:center;cursor:pointer;font-size:12px;
+           padding:2px 7px;border:1px solid var(--rule);border-radius:4px;background:#fff}
+  #status{padding:7px 10px;border-radius:4px;border:1px solid var(--rule);background:#fff;font-weight:600}
+  #status.ok{color:var(--ok);border-color:#bfe3c6;background:#f3fbf4}
+  #status.no{color:var(--warn);border-color:#eadcb8;background:#fdf8ec}
+  #status.bad{color:var(--bad);border-color:#f0c9c6;background:#fdf3f2}
+  .box{background:#fff;border:1px solid var(--rule);border-radius:4px;padding:8px 10px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px}
+  .kv b{font-weight:600;color:var(--muted)}
+  .pill{display:inline-block;padding:0 5px;border-radius:3px;background:#eee9e2;
+        font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .hit{display:block;width:100%;text-align:left;margin-bottom:3px;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .no{color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="left">
+    <canvas id="cv"></canvas>
+    <div id="hud">
+      <span class="mono">Q(</span>
+      <input type="number" id="pi" value="2" min="0" max="6" title="i">
+      <input type="number" id="pm" value="2" min="1" max="6" title="m">
+      <input type="number" id="pn" value="2" min="2" max="6" title="n">
+      <span class="mono">)</span>
+      <button id="rebuild">build</button>
+      <span style="width:8px"></span>
+      <button id="zOut">&minus;</button><span id="zLabel" class="mono">1</span><button id="zIn">+</button>
+      <button id="zFit">fit</button>
+    </div>
+    <div id="tip"><b>Click the start, then click the end.</b> Both snap to the nearest generator, and
+      the blue curve is the piece of beta between them. <span class="mono">&larr;</span>/<span class="mono">&rarr;</span>
+      move the far end one arc along beta (hold shift for five); a third click starts a new pair,
+      escape clears. Scroll to zoom, shift-drag to pan.</div>
+  </div>
+  <div id="right">
+    <h1>Beta arcs on the universal cover</h1>
+    <div id="status">building…</div>
+
+    <h2>Diagram</h2>
+    <div class="box kv" id="info"></div>
+
+    <h2>Selection</h2>
+    <div class="box" id="selection"></div>
+
+    <h2>Disc</h2>
+    <div class="box" id="disc"></div>
+
+    <h2>Scan</h2>
+    <div class="row">
+      <button id="scan">find every disc from the start point</button>
+    </div>
+    <div class="box" id="scanOut" style="margin-top:6px"><span class="no">nothing yet</span></div>
+
+    <h2>View</h2>
+    <div class="row">
+      <label class="tg"><input type="checkbox" id="tBase" checked> basepoints</label>
+      <label class="tg"><input type="checkbox" id="tGen" checked> generators</label>
+      <label class="tg"><input type="checkbox" id="tTrack" checked> full beta</label>
+      <label class="tg"><input type="checkbox" id="tRegion" checked> shade D</label>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <span class="no">arcs lifted</span><input type="number" id="pArcs" value="4" min="1" max="12" title="circuits">
+      <span class="no">scan range</span><input type="number" id="pScan" value="10" min="1" max="200">
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { Q, layout, liftBeta, subTrack, nearestNode, tileExtent, scaling, gridSettingsFor } from './src/index.js';
+import { solve } from '../grid-arc/src/index.js';
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const el = (id) => document.getElementById(id);
+
+const S = {
+  diagram: null, laidOut: null, track: null, settings: null, scale: null, extent: null,
+  view: { cx: 0, cy: 0, k: 1 },
+  hover: null, start: null, end: null, result: null, scan: null, error: null
+};
+let CW = 800, CH = 800;
+
+/* ---------------------------------------------------------------- build */
+function build() {
+  const i = +el('pi').value, m = +el('pm').value, n = +el('pn').value;
+  const circuits = +el('pArcs').value;
+  S.hover = S.start = S.end = S.result = S.scan = null; S.error = null;
+  try {
+    const diagram = Q(i, m, n);
+    const laidOut = layout(diagram, { cell: 26 });
+    // lift once to see where it goes, then again shifted so every copy has non-negative index
+    const probe = liftBeta(diagram, laidOut, { arcs: diagram.arcs.length * circuits });
+    const first = tileExtent(probe, 1);
+    const track = liftBeta(diagram, laidOut, {
+      arcs: diagram.arcs.length * circuits, startTile: [1 - first[0], 1 - first[1]]
+    });
+    const extent = tileExtent(track, 1);
+    const { settings } = gridSettingsFor(laidOut, { extent });
+    Object.assign(S, { diagram, laidOut, track, settings, extent, scale: scaling(laidOut) });
+    fit();
+  } catch (err) {
+    S.error = err.message; S.diagram = null;
+  }
+  render();
+}
+
+/* ---------------------------------------------------------------- view */
+const px = (p) => [CW / 2 + (p[0] - S.view.cx) * S.view.k, CH / 2 - (p[1] - S.view.cy) * S.view.k];
+const un = (x, y) => [S.view.cx + (x - CW / 2) / S.view.k, S.view.cy - (y - CH / 2) / S.view.k];
+
+function fit() {
+  if (!S.laidOut) return;
+  const { width, height } = S.laidOut, [i0, j0, i1, j1] = S.extent;
+  const w = (i1 - i0) * width, h = (j1 - j0) * height;
+  S.view.cx = (i0 + i1) / 2 * width; S.view.cy = (j0 + j1) / 2 * height;
+  S.view.k = Math.min((CW - 60) / w, (CH - 60) / h);
+  el('zLabel').textContent = S.view.k.toFixed(2);
+}
+function zoom(factor, anchor) {
+  const before = anchor ? un(anchor[0], anchor[1]) : [S.view.cx, S.view.cy];
+  S.view.k = Math.max(0.02, Math.min(6, S.view.k / factor));
+  if (anchor) {
+    const after = un(anchor[0], anchor[1]);
+    S.view.cx += before[0] - after[0]; S.view.cy += before[1] - after[1];
+  }
+  el('zLabel').textContent = S.view.k.toFixed(2);
+  render();
+}
+function resize() {
+  const r = cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  CW = Math.max(200, r.width); CH = Math.max(200, r.height);
+  cv.width = Math.round(CW * dpr); cv.height = Math.round(CH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  render();
+}
+
+/* ---------------------------------------------------------------- solving */
+/** How far either side of the start the scan looks. Clicking is not restricted this way. */
+function scanRange() {
+  const max = +el('pScan').value;
+  return [Math.max(0, S.start - max), Math.min(S.track.nodes.length - 1, S.start + max)];
+}
+/** Step the far end along the track, never landing on the start itself. */
+function nudgeEnd(step) {
+  const last = S.track.nodes.length - 1;
+  let next = Math.max(0, Math.min(last, (S.end ?? S.start) + step));
+  if (next === S.start) next = Math.max(0, Math.min(last, next + Math.sign(step)));
+  return next === S.start ? S.end : next;
+}
+
+function solveSelection() {
+  S.result = null;
+  if (S.start === null || S.end === null || S.start === S.end) return;
+  const cover = subTrack(S.track, S.start, S.end);
+  if (!cover) return;
+  S.result = solve(S.scale.pathToGrid(cover), { grid: S.settings, decisions: true });
+  S.result.cover = cover;
+}
+
+function runScan() {
+  if (S.start === null) return;
+  const [lo, hi] = scanRange(), hits = [];
+  for (let b = lo; b <= hi; b++) {
+    if (b === S.start) continue;
+    const cover = subTrack(S.track, S.start, b);
+    if (!cover) continue;
+    const r = solve(S.scale.pathToGrid(cover), { grid: S.settings });
+    if (r.status === 'solved')
+      hits.push({ to: b, arcs: b - S.start, generator: S.track.nodes[b].generator,
+                  directions: r.solutions[0].directions.join(' ') });
+  }
+  S.scan = hits;
+  render();
+}
+
+/* ---------------------------------------------------------------- drawing */
+const stroke = (points, colour, width, dash) => {
+  if (!points || points.length < 2) return;
+  ctx.save(); ctx.strokeStyle = colour; ctx.lineWidth = width;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; if (dash) ctx.setLineDash(dash);
+  ctx.beginPath();
+  points.forEach((p, k) => { const q = px(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+  ctx.stroke(); ctx.restore();
+};
+const fill = (points, colour) => {
+  if (!points || points.length < 3) return;
+  ctx.save(); ctx.fillStyle = colour; ctx.beginPath();
+  points.forEach((p, k) => { const q = px(p); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+  ctx.closePath(); ctx.fill(); ctx.restore();
+};
+const disc = (p, colour, r) => {
+  ctx.save(); ctx.fillStyle = colour; const q = px(p);
+  ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 7); ctx.fill(); ctx.restore();
+};
+const ring = (p, colour, r, w) => {
+  ctx.save(); ctx.strokeStyle = colour; ctx.lineWidth = w ?? 2; const q = px(p);
+  ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 7); ctx.stroke(); ctx.restore();
+};
+
+function render() {
+  ctx.clearRect(0, 0, CW, CH);
+  if (!S.diagram) { paint(); return; }
+  const { width, height, basepoint } = S.laidOut, [i0, j0, i1, j1] = S.extent, k = S.view.k;
+
+  // the alpha curves
+  ctx.save(); ctx.strokeStyle = '#f0b9b9'; ctx.lineWidth = Math.max(1, Math.min(2.5, k * 2));
+  ctx.beginPath();
+  for (let i = i0; i <= i1; i++) {
+    const a = px([i * width, j0 * height]), b = px([i * width, j1 * height]);
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+  }
+  for (let j = j0; j <= j1; j++) {
+    const a = px([i0 * width, j * height]), b = px([i1 * width, j * height]);
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+  }
+  ctx.stroke(); ctx.restore();
+
+  // the region D
+  const solution = S.result?.solutions?.[0];
+  if (solution && el('tRegion').checked)
+    fill(S.scale.pathToCover(solution.region.polygon), 'rgba(161,18,18,0.20)');
+
+  // beta everywhere it was lifted
+  if (el('tTrack').checked)
+    for (const seg of S.track.segments) stroke(seg, '#7ea6ec', Math.max(1, k * 2));
+
+  // the chosen piece of beta
+  if (S.start !== null && S.end !== null && S.result?.cover)
+    stroke(S.result.cover, '#1a4fd6', Math.max(2, k * 3.2));
+
+  // the red path
+  if (solution)
+    stroke(S.scale.pathToCover(solution.points), '#a11212', Math.max(2.5, k * 4));
+
+  // basepoints, one per copy at its top-left corner
+  if (el('tBase').checked) {
+    const inside = new Set((solution?.region.forbiddenInside ?? S.result?.rejected?.[0]?.region.forbiddenInside ?? [])
+      .map((f) => `${f.cell[0]},${f.cell[1]}`));
+    for (let i = i0; i < i1; i++) for (let j = j0; j < j1; j++) {
+      const at = [i * width + basepoint.at[0], j * height + basepoint.at[1]];
+      const hot = inside.has(`${i},${j}`);
+      disc(at, hot ? '#b3261e' : 'rgba(179,38,30,0.55)', hot ? Math.max(3, k * 4) : Math.max(1.6, k * 2.2));
+      if (hot) ring(at, '#b3261e', Math.max(8, k * 10), 2);
+    }
+  }
+
+  // generators
+  if (el('tGen').checked && k > 0.12)
+    for (const node of S.track.nodes) disc(node.at, '#2f3437', Math.max(1.5, k * 2));
+
+  if (S.hover !== null && S.hover !== S.start && S.hover !== S.end)
+    ring(S.track.nodes[S.hover].at, '#6b645d', Math.max(5, k * 7), 1.5);
+  if (S.start !== null) ring(S.track.nodes[S.start].at, '#1a7f37', Math.max(6, k * 8), 3);
+  if (S.end !== null) ring(S.track.nodes[S.end].at, '#b3261e', Math.max(6, k * 8), 3);
+  paint();
+}
+
+/* ---------------------------------------------------------------- panel */
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+function paint() {
+  const status = el('status');
+  if (S.error) { status.className = 'bad'; status.textContent = S.error; }
+  else if (!S.diagram) { status.className = ''; status.textContent = 'no diagram'; }
+  else if (S.start === null) { status.className = ''; status.textContent = 'click a generator to start'; }
+  else if (S.end === null) { status.className = ''; status.textContent = 'now click the far end'; }
+  else if (!S.result) { status.className = ''; status.textContent = 'nothing to compute'; }
+  else if (S.result.status === 'solved') { status.className = 'ok'; status.textContent = 'disc found'; }
+  else if (S.result.status === 'invalid') { status.className = 'bad'; status.textContent = 'this piece of beta is not usable'; }
+  else { status.className = 'no'; status.textContent = 'no disc'; }
+
+  if (!S.diagram) { el('info').innerHTML = ''; el('selection').innerHTML = ''; el('disc').innerHTML = ''; return; }
+  const d = S.diagram, note = d.notes;
+  el('info').innerHTML =
+    `<b>${d.name}</b><span>H(r=${note.r}, s=${note.s})</span>` +
+    `<b>generators</b><span>${d.xCount} x, ${d.yCount} y</span>` +
+    `<b>arcs</b><span>${d.arcs.length}, beta in ${d.components().length} piece</span>` +
+    `<b>homology</b><span class="mono">[${S.track.period}] per circuit</span>` +
+    `<b>lifted</b><span>${S.track.segments.length} arcs over ${S.extent[2] - S.extent[0]} x ${S.extent[3] - S.extent[1]} copies</span>` +
+    `<b>epsilon</b><span class="mono">${S.settings.epsForbidden.toPrecision(3)}</span>` +
+    `<b>clearance</b><span class="mono">beta stays ${S.settings.minLatticeDistance.toPrecision(3)} from lattice points</span>`;
+
+  if (S.start === null) { el('selection').innerHTML = '<span class="no">nothing selected</span>'; }
+  else {
+    const a = S.track.nodes[S.start], b = S.end === null ? null : S.track.nodes[S.end];
+    const travelled = S.end === null ? 0 : S.end - S.start;
+    el('selection').innerHTML = `<div class="kv">` +
+      `<b>from</b><span class="mono">${a.generator} in copy [${a.tile}]</span>` +
+      (b ? `<b>to</b><span class="mono">${b.generator} in copy [${b.tile}]</span>` +
+           `<b>travelled</b><span>${Math.abs(travelled)} arc${Math.abs(travelled) === 1 ? '' : 's'} ` +
+           `${travelled > 0 ? 'forward' : 'backward'} along beta</span>` : '') +
+      `</div>` + (S.end === null
+        ? '<div style="margin-top:5px;color:var(--muted)">click the far end, or use the arrow keys</div>'
+        : '<div style="margin-top:5px;color:var(--muted)">click anywhere to start a new pair</div>');
+  }
+
+  const out = [];
+  if (S.result?.status === 'invalid') {
+    out.push('<ul style="margin:0;padding-left:18px;color:var(--bad)">' +
+      S.result.problems.slice(0, 4).map((p) => `<li>${esc(p.message)}</li>`).join('') + '</ul>');
+  } else if (S.result?.status === 'solved') {
+    const s = S.result.solutions[0];
+    out.push(`<div class="mono" style="font-size:14px;color:var(--path);letter-spacing:.08em">${s.directions.join(' ')}</div>`);
+    out.push(`<div class="kv" style="margin-top:6px">` +
+      `<b>kind</b><span class="pill">${s.kind}</span>` +
+      `<b>area</b><span class="mono">${s.region.area.toFixed(5)}</span>` +
+      `<b>cells</b><span>${S.result.arc.cells.length} met by beta</span>` +
+      `<b>solutions</b><span>${S.result.solutions.length}</span></div>`);
+  } else if (S.result) {
+    out.push(`<div style="color:var(--warn)">${esc(S.result.reason ?? '')}</div>`);
+    const rejected = S.result.rejected?.[0];
+    if (rejected?.region.forbiddenInside.length)
+      out.push(`<div class="mono" style="margin-top:4px;color:var(--bad)">D swallows basepoint(s) ` +
+        rejected.region.forbiddenInside.map((f) => `[${f.cell}]`).join(' ') + ' — ringed in the picture</div>');
+  } else out.push('<span class="no">nothing computed</span>');
+  el('disc').innerHTML = out.join('');
+
+  if (!S.scan) el('scanOut').innerHTML = '<span class="no">nothing yet</span>';
+  else if (!S.scan.length) el('scanOut').innerHTML = '<span class="no">no discs from this start point</span>';
+  else el('scanOut').innerHTML = `<div style="margin-bottom:5px">${S.scan.length} disc${S.scan.length === 1 ? '' : 's'}</div>` +
+    S.scan.map((h) => `<button class="hit" data-to="${h.to}">${h.arcs > 0 ? '+' : ''}${h.arcs} → ` +
+      `${h.generator}  <span style="color:var(--path)">${h.directions}</span></button>`).join('');
+}
+
+el('scanOut').addEventListener('click', (ev) => {
+  const to = ev.target.closest('[data-to]');
+  if (!to) return;
+  S.end = +to.dataset.to; solveSelection(); render();
+});
+
+/* ---------------------------------------------------------------- input */
+let mode = null, panFrom = null;
+const at = (ev) => { const r = cv.getBoundingClientRect(); return un(ev.clientX - r.left, ev.clientY - r.top); };
+
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+cv.addEventListener('pointerdown', (ev) => {
+  if (!S.diagram) return;
+  cv.setPointerCapture(ev.pointerId);
+  if (ev.button === 2 || ev.shiftKey) {
+    mode = 'pan'; const r = cv.getBoundingClientRect();
+    panFrom = { x: ev.clientX - r.left, y: ev.clientY - r.top, cx: S.view.cx, cy: S.view.cy };
+    return;
+  }
+  mode = 'pick';
+});
+cv.addEventListener('pointermove', (ev) => {
+  if (!S.diagram) return;
+  if (mode === 'pan') {
+    const r = cv.getBoundingClientRect();
+    S.view.cx = panFrom.cx - ((ev.clientX - r.left) - panFrom.x) / S.view.k;
+    S.view.cy = panFrom.cy + ((ev.clientY - r.top) - panFrom.y) / S.view.k;
+    render(); return;
+  }
+  // the pointer only ever previews which generator a click would land on
+  const near = nearestNode(S.track, at(ev)).index;
+  if (near !== S.hover) { S.hover = near; render(); }
+});
+cv.addEventListener('pointerup', (ev) => {
+  if (mode === 'pan') { mode = null; return; }
+  if (mode !== 'pick' || !S.diagram) return;
+  mode = null;
+  const near = nearestNode(S.track, at(ev)).index;
+  if (S.start === null || S.end !== null) {          // first click, or start over
+    S.start = near; S.end = null; S.result = null; S.scan = null;
+  } else if (near === S.start) {                     // clicking the start again cancels it
+    S.start = null; S.result = null; S.scan = null;
+  } else {                                           // second click: the far end
+    S.end = near;
+    solveSelection();
+  }
+  render();
+});
+cv.addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const r = cv.getBoundingClientRect();
+  zoom(Math.exp(ev.deltaY * 0.0016), [ev.clientX - r.left, ev.clientY - r.top]);
+}, { passive: false });
+
+window.addEventListener('keydown', (ev) => {
+  if (/INPUT|SELECT/.test(document.activeElement.tagName)) return;
+  if (S.start === null || !S.diagram) return;
+  const step = ev.shiftKey ? 5 : 1;
+  if (ev.key === 'ArrowRight') S.end = nudgeEnd(step);
+  else if (ev.key === 'ArrowLeft') S.end = nudgeEnd(-step);
+  else if (ev.key === 'Escape') { S.start = S.end = S.result = S.scan = null; render(); return; }
+  else return;
+  ev.preventDefault(); solveSelection(); render();
+});
+
+el('rebuild').onclick = build;
+el('pArcs').onchange = build;
+el('zIn').onclick = () => zoom(1 / 1.35);
+el('zOut').onclick = () => zoom(1.35);
+el('zFit').onclick = () => { fit(); render(); };
+el('scan').onclick = runScan;
+for (const id of ['tBase', 'tGen', 'tTrack', 'tRegion']) el(id).onchange = render;
+
+window.__viewer = S;                     // handy when poking at it from the console
+new ResizeObserver(resize).observe(cv.parentElement);
+build();
+resize();
+</script>
+</body>
+</html>

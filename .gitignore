@@ -1,0 +1,6 @@
+# generated: every one of these is one command away
+out/
+counterexamples.json
+
+node_modules/
+.DS_Store

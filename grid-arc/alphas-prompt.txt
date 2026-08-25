@@ -1,0 +1,37 @@
+The problem: There is a (theoretically) infinite 2D grid with red lines. We draw a continuous arc from a point on one of the edges to another point on one of the edges (neither of these can _ever_ be one of the vertices of the grid). The goal is to find a red path (a path along the edges, that can and will use the lattice points) that goes from the first point to the second point, subject to some conditions. Or, terminate saying none exists.
+
+The output: A solver and visualizer. I should be able to draw the blue curve on the thing, and the algorithm should highlight the parts of the red grid (say, draw it in light red, and the parts of the edges taken in dark red) that is the path from the first vertex to the second vertex.
+
+The rules: 
+
+- The red path must go from the starting point $x_s$ to the ending point $x_e$. 
+- It should _never_ cross any other point of intersection between the blue curve and the red grid. By the Jordan curve theorem, this is now a proper embedded disc in $\mathbb R^2$ (assuming the blue curve doesn't self-intersect, which I guarantee it will not; otherwise, nasal demons). 
+- This embedded region should _never_ contain any _forbidden point_. These points are uniformly at the top-left corner of each square, very close to the vertex. For instance, their coordinates could be given by $\mathbb Z + (\epsilon, -\epsilon)$ for sufficiently small $\epsilon > 0$. In practice, this means that no whole square can be in the embedded disc, and if the edges of a (contained) square are traversed, then the blue curve must "shield" that portion of the path from the forbidden point of that square
+- At the two endpoints, the red and blue curves must meet at a non-reflex angle. This, together with an orientation fact, means that we already know the first and final segment of any path. If the blue path leaves from
+	- the bottom edge of a square and goes upwards, the red path must start by going to the right
+	- the top edge of a square and goes downwards, the red path must start by going to the left
+	- the left edge of a square and goes rightwards, the red path must start by going down
+	- the right edge of a square and goes leftwards, the red path must start by going up
+	and if the blue path ends at
+	- the bottom edge of a square coming from up, the red path must be coming in from the left
+	- the top edge of a square coming from below, the red path must coming from the right
+	- the left edge of a square coming from the right, the path must be coming from above. This will almost never happen so as not to include a forbidden point, but there are cases where it can happen (when the starting point and ending point are on the same edge)
+	- the right edge of a square coming from the left, the red path must be coming from below
+	because of these conditions, we even know the two lattice points between which we must find a path. It might be that there is _no_ lattice point on the solution path, but that is if and only if the start and end points are on the same edge. Either ignore that case or make it a special check. If these two lattice points end up being the same, then we are done! But often they won't be.
+	
+	You can imagine that as the blue path travels, there is a vector pointing a 90 degree clockwise rotation from the velocity vector, which tells us the contained region (only implement this vector if easier methods fail). For the red path, this vector points a 90 degree anticlockwise rotation from the velocity vector of the path.
+
+Efficiency and finite termination: Obviously we won't have an infinite grid, for now make it 20 x 20. I will certainly not draw large enough blue curves to test. For pathfinding, the path cannot really be much longer than the length of the curve, and really it must stick quite close to the curve because the enclosed disc can never contain a full square.
+
+Ideas: 
+- At each lattice point reached, there are going to be three options. Note that if you come from the left, you can never really go down because that will immediately contain the forbidden region. If you come from the right -> you will never come upon a lattice point from the right, because that too immediately goes into the forbidden region. Coming from above, you can't go down or even to the left, because of the forbidden basepoint. So in fact you must turn right. Coming from below, though, you can do anything. Thus when you come from (right, up, left, down) you have (0, 1, 2, 3) options of where to go.
+- If coming from the left, you go right, then you must be shielded from the forbidden region by the blue curve. This means that the blue curve must be intersecting the UP-going red edge from that point. In this case, though, you _must_ go right because going up will prematurely intersect the blue curve
+- If coming from below,
+	- if you go right, then the exact same idea holds, which also means that you couldn't have gone up anyways. Could you have gone left? If the blue curve intersects that edge, then no. If it doesn't, then you include a forbidden region. Thus your only choice was right. Thus you go right iff the blue curve intersects the UP-going red edge from your lattice point.
+	- If you go up, then you must be shielded from the forbidden region to your left. Let's call that square $S$, and you are currently going up on the right edge of $S$. To shield you, the blue curve must be going from bottom to top or left to top on $S$. If it is bottom-top, then having turned left would have prematurely met the blue curve. If it is left-top, the turning left would not have shielded from the forbidden region. Thus you go up iff the blue curve on the northwest square (second quadrant) from your POV at the intersection point is going bottom-top or left-top
+	- You can only go left if you run into the blue curve on the edge, before the forbidden point.
+
+Huh, maybe the decision is actually immediate.
+
+
+Bonus: highlight the contained disc on a successful run.

@@ -1,0 +1,14 @@
+{
+  "name": "heegaard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bordered Heegaard diagrams on the torus, and the Q(i,m,n) family",
+  "main": "src/index.js",
+  "exports": { ".": "./src/index.js", "./*": "./src/*" },
+  "scripts": {
+    "test": "node test/test.js",
+    "draw": "node cli.js"
+  },
+  "engines": { "node": ">=18" }
+}

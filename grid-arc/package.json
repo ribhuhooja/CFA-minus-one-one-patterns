@@ -1,0 +1,21 @@
+{
+  "name": "grid-arc-solver",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Solver and visualizer for grid paths shielded by a drawn arc",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node test/test.js",
+    "stress": "node test/stress.js 15000",
+    "local": "node test/localrules.js 8000",
+    "serve": "node serve.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./*": "./src/*"
+  }
+}
