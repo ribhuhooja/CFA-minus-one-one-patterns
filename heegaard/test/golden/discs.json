@@ -1,0 +1,106 @@
+{
+  "note": "disc lists for a fixed set of diagrams, as a regression fixture; sha256 of toCSV(format reference, sorted)",
+  "produced": "2026-08-25",
+  "cases": [
+    {
+      "i": 1,
+      "m": 3,
+      "n": 2,
+      "r": 4,
+      "s": 9,
+      "generators": 27,
+      "discs": 70,
+      "sha256": "ec30e17c07c0a144"
+    },
+    {
+      "i": 1,
+      "m": 2,
+      "n": 4,
+      "r": 3,
+      "s": 16,
+      "generators": 31,
+      "discs": 106,
+      "sha256": "efa92f7ec453dc38"
+    },
+    {
+      "i": 1,
+      "m": 5,
+      "n": 5,
+      "r": 6,
+      "s": 48,
+      "generators": 79,
+      "discs": 340,
+      "sha256": "af0b8fc541f84688"
+    },
+    {
+      "i": 2,
+      "m": 4,
+      "n": 3,
+      "r": 13,
+      "s": 53,
+      "generators": 109,
+      "discs": 345,
+      "sha256": "7a7220a964a227c6"
+    },
+    {
+      "i": 2,
+      "m": 3,
+      "n": 5,
+      "r": 10,
+      "s": 78,
+      "generators": 123,
+      "discs": 502,
+      "sha256": "d45645c6298e8004"
+    },
+    {
+      "i": 3,
+      "m": 3,
+      "n": 3,
+      "r": 16,
+      "s": 64,
+      "generators": 131,
+      "discs": 408,
+      "sha256": "c75747df58462942"
+    },
+    {
+      "i": 2,
+      "m": 4,
+      "n": 5,
+      "r": 13,
+      "s": 103,
+      "generators": 161,
+      "discs": 665,
+      "sha256": "49732383f3b9e7fe"
+    },
+    {
+      "i": 5,
+      "m": 3,
+      "n": 2,
+      "r": 28,
+      "s": 57,
+      "generators": 171,
+      "discs": 454,
+      "sha256": "5ec028142afcd9d4"
+    },
+    {
+      "i": 5,
+      "m": 2,
+      "n": 4,
+      "r": 19,
+      "s": 112,
+      "generators": 191,
+      "discs": 682,
+      "sha256": "70fc542091855eb2"
+    },
+    {
+      "i": 3,
+      "m": 5,
+      "n": 5,
+      "r": 26,
+      "s": 208,
+      "generators": 319,
+      "discs": 1320,
+      "sha256": "b9e7b9f6b2ba8d7e"
+    }
+  ]
+}

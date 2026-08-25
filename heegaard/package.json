@@ -5,10 +5,17 @@
   "type": "module",
   "description": "Bordered Heegaard diagrams on the torus, and the Q(i,m,n) family",
   "main": "src/index.js",
-  "exports": { ".": "./src/index.js", "./*": "./src/*" },
+  "exports": {
+    ".": "./src/index.js",
+    "./*": "./src/*"
+  },
   "scripts": {
     "test": "node test/test.js",
-    "draw": "node cli.js"
+    "draw": "node cli.js",
+    "regression": "node test/regression.js",
+    "conjecture": "node test/compare-conjecture.js 10"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
