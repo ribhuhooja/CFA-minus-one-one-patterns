@@ -35,6 +35,8 @@ cd ../grid-arc && npm test && npm run stress
 
 ## What is established
 
+Do not rely on these in the solver. This is the data that we have found.
+
 - **Disc count**: `2m(n+2)^2 * i - [m(n^2+2n+5) - m^2 - n^2]`. Exact on all 646 harvested
   diagrams, i up to 20. At `m=n=2` it is `64i-18`.
 - **Q(i,2,2) matches the user's closed-form arrow tables exactly**, i = 1..10, all 3340 rows.
@@ -82,17 +84,39 @@ has the discs.
 
 ## What is next, in the order the user wants it
 
+0. **A Heegaard-aware JS solver** — do this first, before the formats, so modularisation is
+   not happening on shifting ground. The present solver treats a piece of beta as an arbitrary
+   curve and rediscovers its crossings by root-finding. For a Heegaard diagram all of that is
+   known in advance:
+
+   | general solver | Heegaard-aware |
+   |---|---|
+   | crossings by root-finding, O(points) | the generators, sliced from the node list |
+   | which alpha edge | from the generator's side and index |
+   | which cells | each arc's cell is fixed per diagram, then tile-shifted |
+   | blocked edges | the alpha edges the generators sit on |
+   | §2 validation per piece | not applicable — nothing to validate |
+
+   Verified 480/480: a piece with `k` arcs has exactly `k+1` crossings and each **is** the
+   generator at that track node. Precompute per diagram: for each arc, its (entry generator,
+   exit generator, entry side, exit side, cell); per generator, its alpha edge and parameter.
+   Then a piece is a run of arcs and everything above is a lookup.
+
+   Sequence: keep the existing global check (P1)-(P4) at first, replacing only the per-piece
+   derivation — that is where the time goes and it is the safe half. Verify against
+   `npm run regression` and `npm run conjecture` (both must stay byte-identical), then measure.
+   Only afterwards consider replacing the winding check with integer domain multiplicity;
+   note the regions are faces of the alpha-union-beta arrangement, finer than cells, since
+   beta cuts a cell into pieces.
+
 1. **A standard Heegaard-diagram class and a CSV format for it**, plus a CSV format for the
    discs, and modularisation around those two formats. Everything below depends on this.
    Open questions the user has not settled: whether the diagram format carries geometry or
    only combinatorics (leaning combinatorics + an optional layout section), and how a
    generator is identified across files (currently `x_13` / `y_7`).
-2. **A Python package** that does the computation. Key realisation from this session: for a
-   Heegaard diagram the crossings of beta with the alpha curves **are the generators** —
-   verified 480/480 — so a Heegaard-specific solver never has to do geometric crossing
-   detection, and the (P3) winding check is really integer domain multiplicity. Such a solver
-   could have no floating point in it at all, which makes Python's speed penalty largely moot.
-   (Measured penalty on the *current* float-heavy primitives: 26-45x versus JS.)
+2. **A Python package** that does the computation, ported from the step-0 solver once it is
+   proven. If step 0 gets the float out of the inner loop, Python's penalty largely evaporates;
+   measured penalty on the *current* float-heavy primitives is 26-45x versus JS.
 3. **Any `H(r,s)`, not just `Q(i,m,n)`.** Everything below `Q()` is already general; what is
    missing is a constructor and a check that the straight-segment drawing rule still gives an
    embedded picture off the Q family (`findArcCrossings` will report rather than draw wrong).
