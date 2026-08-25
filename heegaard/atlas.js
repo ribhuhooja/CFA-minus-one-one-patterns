@@ -1,5 +1,6 @@
 /**
- * node atlas.js [i] [m] [n] [--cell=12] [--out=out/Qimn-atlas.svg] [--dpi=110] [--no-png]
+ * node atlas.js [i] [m] [n] [--cell=12] [--out=out/Qimn-atlas.svg]
+ *                [--dpi=110] [--max-px=40] [--no-png]
  *
  * Writes the SVG, and a PNG beside it when Inkscape is installed.
  */
@@ -15,6 +16,7 @@ const [i = 1, m = 2, n = 2] = positional;
 const cell = Number(flag('cell', 12));
 const arrange = flag('arrange', 'packed');   // 'packed' | 'insitu'
 const dpi = Number(flag('dpi', 110));
+const maxMegapixels = Number(flag('max-px', 40));   // 0 disables the guard
 const wantPng = !process.argv.includes('--no-png');
 
 const diagram = Q(i, m, n);
@@ -28,7 +30,8 @@ const kb = (bytes) => `${(bytes / 1024).toFixed(0)} KB`;
 console.log(`${diagram.name}: ${enumeration.discs.length} discs -> ${out} (${kb(svg.length)}, ${arrange})`);
 
 if (wantPng) {
-  const png = svgToPng(out, { dpi });
-  if (png.ok) console.log(`  and ${png.path} (${kb(png.bytes)}, ${dpi} dpi)`);
-  else console.log(`  no png: ${png.why}`);
+  const png = svgToPng(out, { dpi, maxMegapixels });
+  if (!png.ok) console.log(`  no png: ${png.why}`);
+  else console.log(`  and ${png.path} (${kb(png.bytes)}, ${(png.pixels / 1e6).toFixed(1)} Mpx` +
+    (png.capped ? `, dpi lowered to ${png.dpi.toFixed(0)} to stay under ${maxMegapixels} Mpx` : '') + ')');
 }

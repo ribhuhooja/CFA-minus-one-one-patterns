@@ -364,7 +364,12 @@ amortised and the whole enumeration `O(C^2)` rather than `O(C^3)`. Not done.
 ## The atlas
 
 `node atlas.js 2 2 2` draws every disc at once, and writes a PNG beside the SVG when
-Inkscape is installed (`--no-png` to skip, `--dpi=110` to change the size). PNG rather than
+Inkscape is installed (`--no-png` to skip, `--dpi=110` to change the size, `--max-px=40` for
+the raster cap, `0` to lift it). The cap matters: the canvas grows with both the number of
+discs and the size of a domain, so `Q(4,7,3)` declares 157272 x 153302 user units, and asking
+for that at 110 dpi is a 31 gigapixel image — which does not fail, it simply never finishes.
+The dpi is lowered as far as needed and the reduction is reported. If the picture comes out
+too coarse, shrink the vector instead with a smaller `--cell`. PNG rather than
 JPEG on purpose: these are line drawings, and on these very files JPEG at quality 92 came out
 two to three times *larger* than PNG as well as lossier, because a DCT codec spends its bits
 on ringing around every grid line. Nothing else in the package shells out, and nothing
