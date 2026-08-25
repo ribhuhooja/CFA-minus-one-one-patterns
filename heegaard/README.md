@@ -363,7 +363,7 @@ amortised and the whole enumeration `O(C^2)` rather than `O(C^3)`. Not done.
 
 ## The atlas
 
-`node atlas.js 2 2 2` draws every disc at once, and writes a PNG beside the SVG when
+`node atlas.js 2 2 2` draws a readable sample of the discs, and writes a PNG beside the SVG when
 Inkscape is installed (`--no-png` to skip, `--dpi=110` to change the size, `--max-px=40` for
 the raster cap, `0` to lift it). The cap matters: the canvas grows with both the number of
 discs and the size of a domain, so `Q(4,7,3)` declares 157272 x 153302 user units, and asking
@@ -381,6 +381,16 @@ on top of one another, so by default each is slid into its own slot by a whole n
 copies (shelf packing, tallest first, the number of columns chosen so the result comes out
 roughly square given how wide a copy is). `--arrange=insitu` leaves them where they were
 found instead.
+
+**What gets drawn.** By default a sample, not everything: the largest disc of every distinct
+(chord word, U power) class first — that is the whole variety of the diagram, one specimen
+each — then the largest ones left over, up to `--sample=80`. `--all` draws every disc, which
+for a large diagram is a canvas nobody can read. `--per-class=2` takes two specimens of each
+class instead of one.
+
+On `Q(2,3,5)`, which has 502 discs in 59 classes: a sample of 20 covers 20 classes, 40 covers
+40, and 80 covers all 59 while still leaving room for the biggest. Below 80 you lose classes
+before you lose size, which is the intended trade.
 
 The colours mean nothing. They cycle in placement order so that neighbouring slots differ,
 with a repair pass for any two that end up the same colour and close enough to read as one

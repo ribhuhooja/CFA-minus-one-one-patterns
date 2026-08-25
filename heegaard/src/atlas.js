@@ -66,6 +66,42 @@ export function packIntoSlots(boxes, gap = 0, aspect = 1) {
   return shifts;
 }
 
+/**
+ * Choose a readable handful of discs rather than all of them.
+ *
+ * Two things make a disc worth drawing: being unlike the others, and being big enough to see.
+ * So every (chord word, U power) class contributes its largest disc first -- that is the
+ * whole variety of the diagram, one specimen each -- and whatever budget is left over goes to
+ * the largest discs still unpicked. Area is signed and always negative, so |area| is the size.
+ *
+ * @param {Object[]} discs
+ * @param {{limit?:number, perClass?:number}} [options]
+ * @returns {{chosen:Object[], classes:number, shown:number, total:number}}
+ */
+export function sampleDiscs(discs, options = {}) {
+  const { limit = 80, perClass = 1 } = options;
+  const byClass = new Map();
+  for (const d of discs) {
+    const key = `${d.word}|${d.U}`;
+    if (!byClass.has(key)) byClass.set(key, []);
+    byClass.get(key).push(d);
+  }
+  for (const list of byClass.values()) list.sort((a, b) => Math.abs(b.area) - Math.abs(a.area));
+
+  // one specimen per class first, biggest classes' biggest members leading
+  const picked = new Set(), chosen = [];
+  for (let rank = 0; rank < perClass; rank++)
+    for (const list of [...byClass.values()].sort((a, b) => Math.abs(b[0].area) - Math.abs(a[0].area)))
+      if (list[rank] && chosen.length < limit) { chosen.push(list[rank]); picked.add(list[rank]); }
+
+  // then fill up with the largest that are left
+  for (const d of [...discs].sort((a, b) => Math.abs(b.area) - Math.abs(a.area))) {
+    if (chosen.length >= limit) break;
+    if (!picked.has(d)) { chosen.push(d); picked.add(d); }
+  }
+  return { chosen, classes: byClass.size, shown: chosen.length, total: discs.length };
+}
+
 const fmt = (v) => (Math.round(v * 100) / 100).toString();
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 

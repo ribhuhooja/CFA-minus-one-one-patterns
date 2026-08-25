@@ -20,4 +20,4 @@ export {
   REEB_CHORDS, REEB_CONVENTIONS, toCSV
 } from './discs.js';
 export { conjecturedArrows, conjecturedCount, annotation } from './conjectured.js';
-export { discAtlas, packIntoSlots } from './atlas.js';
+export { discAtlas, packIntoSlots, sampleDiscs } from './atlas.js';
