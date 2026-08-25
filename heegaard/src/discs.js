@@ -51,6 +51,7 @@
  */
 import { boundingBox, windingNumber } from '../../grid-arc/src/geometry.js';
 import { solve, validateArc, edgeContaining, ArcDescriptionBuilder } from '../../grid-arc/src/index.js';
+import { tabulate, PieceBuilder } from './fast.js';
 import { layout } from './layout.js';
 import { liftBeta, subTrack, tileExtent } from './track.js';
 import { scaling, gridSettingsFor } from './bridge.js';
@@ -123,12 +124,15 @@ export function multiplicity(polygon, point) {
  * Every disc of the diagram.
  * @param {import('./diagram.js').HeegaardDiagram} diagram
  * @param {{cell?:number, samples?:number, strategy?:string, convention?:string,
- *           keepRegions?:boolean, onProgress?:Function}} [options]
+ *           engine?:'heegaard'|'generic', keepRegions?:boolean, onProgress?:Function}} [options]
+ *        `engine` picks how a piece is described: 'heegaard' looks the answer up in tables
+ *        precomputed from the diagram, 'generic' rediscovers it from the geometry as the
+ *        general solver does.  They agree; the second is kept for cross-checking.
  * @returns {{discs:Disc[], circuit:number, generators:string[], settings:Object, laidOut:Object, track:Object, tried:number}}
  */
 export function enumerateDiscs(diagram, options = {}) {
   const { cell = 26, samples = 4, strategy = 'walk', convention,
-          keepRegions = false, onProgress } = options;
+          engine = 'heegaard', keepRegions = false, onProgress } = options;
   // An arc is a primitive -- a segment or a parabola -- so it only has to be sampled finely
   // enough for the checks that need points.  The apex is always a sample, which is what keeps
   // a basepoint under a bulge on the right side of it.
@@ -163,16 +167,21 @@ export function enumerateDiscs(diagram, options = {}) {
   const gridSegments = track.segments.map((points) => scale.pathToGrid(points));
   const reversed = gridSegments.map((points) => [...points].reverse());
 
+  const tables = engine === 'heegaard' ? tabulate(diagram, track) : null;
+  const pointsOf = (k, direction) => (direction > 0 ? gridSegments[k] : reversed[k]);
+
   const discs = [];
   let tried = 0;
   for (let start = circuit; start < 2 * circuit; start++) {
     for (const direction of [1, -1]) {
-      const builder = new ArcDescriptionBuilder(settings);
+      const builder = tables ? new PieceBuilder(tables, settings, pointsOf).reset(start, direction)
+                             : new ArcDescriptionBuilder(settings);
       for (let step = 1; step <= circuit; step++) {
         const offset = direction * step;
         const segment = direction > 0 ? start + step - 1 : start - step;
         if (segment < 0 || segment >= gridSegments.length) break;
-        builder.append(direction > 0 ? gridSegments[segment] : reversed[segment]);
+        if (tables) { if (!builder.extend()) break; }
+        else builder.append(direction > 0 ? gridSegments[segment] : reversed[segment]);
         tried++;
         const result = solve(builder.arc, { description: builder.description, strategy });
         if (result.status !== 'solved') continue;

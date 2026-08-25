@@ -84,10 +84,14 @@ has the discs.
 
 ## What is next, in the order the user wants it
 
-0. **A Heegaard-aware JS solver** — do this first, before the formats, so modularisation is
-   not happening on shifting ground. The present solver treats a piece of beta as an arbitrary
-   curve and rediscovers its crossings by root-finding. For a Heegaard diagram all of that is
-   known in advance:
+0. ~~**A Heegaard-aware JS solver**~~ — **DONE**, `heegaard/src/fast.js`, default engine.
+   Worth 2.2x (less than hoped: the incremental builder had already amortised crossing
+   detection away). The real gain is that the inner loop now has no geometry in it, which is
+   what makes a port to a slower language reasonable. `engine: 'generic'` keeps the old path
+   and a test asserts the two agree. The remaining float is the (P1)-(P4) check on completed
+   candidates — replacing that with integer domain multiplicity is still open, and the regions
+   are faces of the alpha-union-beta arrangement, finer than cells, since beta cuts a cell.
+   For reference, what it replaced:
 
    | general solver | Heegaard-aware |
    |---|---|

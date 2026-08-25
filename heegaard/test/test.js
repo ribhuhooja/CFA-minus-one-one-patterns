@@ -293,6 +293,21 @@ console.log('\n  extending a description equals rebuilding it');
   check('appending points that do not join on is refused', threw);
 }
 
+console.log('\n  the Heegaard-aware engine agrees with the generic one');
+{
+  // The fast engine looks a piece's description up in tables instead of rediscovering it from
+  // the geometry.  Everything downstream is shared, so the two must give the same discs.
+  for (const params of [[1, 2, 2], [2, 2, 2], [1, 3, 2], [2, 3, 5]]) {
+    const key = (list) => list
+      .map((d) => [d.source, d.target, d.U, d.word, d.offset].join('|')).sort().join('\n');
+    const generic = enumerateDiscs(Q(...params), { engine: 'generic' });
+    const fast = enumerateDiscs(Q(...params), { engine: 'heegaard' });
+    check(`Q(${params}): both engines find the same discs`, key(generic.discs) === key(fast.discs),
+          `${generic.discs.length} vs ${fast.discs.length}`);
+    check(`Q(${params}): and try the same number of pieces`, generic.tried === fast.tried);
+  }
+}
+
 console.log('\n  the disc atlas');
 {
   const enumeration = enumerateDiscs(Q(1, 2, 2), { cell: 11, samples: 16, keepRegions: true });
