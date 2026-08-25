@@ -204,6 +204,11 @@ export function decomposeIntoCells(arc, crossings) {
  * @property {Object[]} subArcs
  * @property {Set<string>} blockedEdges          edges the arc crosses; a path may not use them
  * @property {Set<string>} candidateEdges        §6: the only edges a path may use
+ * @property {Map<string, Crossing[]>} crossingsByEdge
+ *        the crossings grouped by the edge they lie on.  A long arc crosses the grid
+ *        thousands of times but over only a few dozen distinct edges, so asking "is anything
+ *        on this edge, between here and there" is a lookup rather than a scan -- which is
+ *        what decides four fifths of all solves.
  */
 
 /**
@@ -221,18 +226,26 @@ export function describeArc(arc, options = {}) {
     : validateArc(arc, settings, { assumeSimple: options.assumeSimple });
   if (problems.length)
     return { arc, settings, problems, crossings: [], cells: [], subArcs: [],
-             blockedEdges: new Set(), candidateEdges: new Set() };
+             blockedEdges: new Set(), crossingsByEdge: new Map(),
+             candidateEdges: new Set() };
 
   const { crossings, problems: crossingProblems } = findCrossings(arc);
   if (crossingProblems.length)
     return { arc, settings,
              problems: crossingProblems.map((p) => ({ ...p, message: `degenerate crossing: ${p.message}` })),
-             crossings: [], cells: [], subArcs: [], blockedEdges: new Set(), candidateEdges: new Set() };
+             crossings: [], cells: [], subArcs: [], blockedEdges: new Set(), crossingsByEdge: new Map(),
+             candidateEdges: new Set() };
 
   const { cells, subArcs } = decomposeIntoCells(arc, crossings);
   const blockedEdges = new Set(crossings.map((c) => c.edge));
+  const crossingsByEdge = new Map();
+  for (const c of crossings) {
+    const on = crossingsByEdge.get(c.edge);
+    if (on) on.push(c); else crossingsByEdge.set(c.edge, [c]);
+  }
   const candidateEdges = buildCandidateEdges(arc, cells, options, settings);
-  return { arc, settings, problems: [], crossings, cells, subArcs, blockedEdges, candidateEdges };
+  return { arc, settings, problems: [], crossings, cells, subArcs,
+           blockedEdges, crossingsByEdge, candidateEdges };
 }
 
 function buildCandidateEdges(arc, cells, { searchSpace = 'cells', bboxPad = 2 } = {}, settings = GRID) {

@@ -6,6 +6,7 @@ import {
   conjecturedArrows, conjecturedCount, discAtlas, packIntoSlots
 } from '../src/index.js';
 import { boundingBox } from '../../grid-arc/src/geometry.js';
+import { ArcDescriptionBuilder, describeArc } from '../../grid-arc/src/index.js';
 import { HeegaardDiagram } from '../src/diagram.js';
 import { solve } from '../../grid-arc/src/index.js';
 
@@ -235,6 +236,61 @@ console.log('\n  CSV output');
         reference.split('\n')[1]);
   check('sorting is stable and total',
         toCSV(discs, { format: 'reference', sort: true }) === reference);
+}
+
+console.log('\n  extending a description equals rebuilding it');
+{
+  // The whole speed-up rests on this: appending an arc to a piece of beta must give exactly
+  // what describing the longer piece from scratch gives.  Checked over every prefix, both
+  // directions, on real tracks.
+  const summarise = (d) => JSON.stringify({
+    crossings: d.crossings.map((c) =>
+      [c.p[0].toFixed(9), c.p[1].toFixed(9), c.edge, c.t.toFixed(9), c.segment, c.at.toFixed(9), c.kind]),
+    cells: [...d.cells].map((c) => `${c.i},${c.j}`).sort(),
+    subArcs: d.subArcs.map((a) => [a.cell.join(','), a.entry, a.exit, a.from.toFixed(9), a.to.toFixed(9)]),
+    blocked: [...d.blockedEdges].sort(),
+    candidate: [...d.candidateEdges].sort()
+  });
+
+  let prefixes = 0, disagreed = 0, lookupsChecked = 0, lookupsWrong = 0;
+  for (const params of [[1, 2, 2], [2, 2, 2], [1, 3, 2], [2, 3, 5]]) {
+    const diagram = Q(...params), circuit = diagram.components()[0].length;
+    const drawn = layout(diagram, { cell: 26, samples: 4 });
+    const probe = liftBeta(diagram, drawn, { arcs: circuit * 3 + 1 });
+    const [i0, j0] = tileExtent(probe, 1);
+    const track = liftBeta(diagram, drawn, { arcs: circuit * 3 + 1, startTile: [1 - i0, 1 - j0] });
+    const { settings } = gridSettingsFor(drawn, { extent: tileExtent(track, 1) });
+    const scale = scaling(drawn);
+
+    for (const direction of [1, -1]) {
+      const builder = new ArcDescriptionBuilder(settings);
+      for (let step = 1; step <= Math.min(circuit, 40); step++) {
+        const piece = scale.pathToGrid(subTrack(track, circuit, circuit + direction * step));
+        builder.append(builder.arc.length ? piece.slice(builder.arc.length - 1) : piece);
+        const scratch = describeArc(piece, { grid: settings, assumeValid: true });
+        prefixes++;
+        if (summarise(builder.description) !== summarise(scratch)) disagreed++;
+        // and the by-edge index must answer what a scan of the crossings would
+        const lookup = builder.description.crossingsByEdge;
+        for (const edge of new Set(scratch.crossings.map((c) => c.edge))) {
+          lookupsChecked++;
+          const byIndex = (lookup.get(edge) ?? []).length;
+          const byScan = scratch.crossings.filter((c) => c.edge === edge).length;
+          if (byIndex !== byScan) lookupsWrong++;
+        }
+      }
+    }
+  }
+  console.log(`        ${prefixes} prefixes, ${lookupsChecked} edge lookups`);
+  check('an extended description equals one built from scratch', disagreed === 0,
+        `${disagreed} of ${prefixes} disagreed`);
+  check('the by-edge index answers what a scan would', lookupsWrong === 0,
+        `${lookupsWrong} of ${lookupsChecked} wrong`);
+
+  let threw = false;
+  try { new ArcDescriptionBuilder().append([[3, 3.5], [3.5, 4]]).append([[9, 9.5], [9.5, 10]]); }
+  catch { threw = true; }
+  check('appending points that do not join on is refused', threw);
 }
 
 console.log('\n  the disc atlas');
