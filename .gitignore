@@ -5,6 +5,7 @@ counterexamples.json
 # the data harvest is a one-off study, not part of the package
 heegaard/harvest.js
 heegaard/analyse.js
+heegaard/shapes.js
 
 node_modules/
 .DS_Store
