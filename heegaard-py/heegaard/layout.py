@@ -171,71 +171,76 @@ def _ray_hit(origin, direction, path, cap: float) -> float:
 def strokes(diagram: Diagram) -> list:
     """Every arc of beta as one line or one quadratic curve -- three points, nothing sampled.
 
-    An arc bulges away from the stretch of boundary it spans: a rainbow arches up off its own
-    edge, an arc joining two edges arches away from the corner between them, and one joining
-    *opposite* edges has a whole side behind it, so it is drawn as the straight strand across
-    the domain that it is.
+    Each arc has a shape it would take if it had the room, and it takes as much of it as the
+    arc containing it allows.
 
-    How far it bulges is the one free number, and it is measured against the arc that contains
-    it rather than taken from a table.  Two earlier rules both failed, and for the same
-    reason.  A shape fixed by its endpoints -- the semicircle standing on its two generators,
-    the ellipse centred on the corner through them -- has nothing left to push it clear of
-    what it holds, and a rainbow goes straight through the flattened arc above it.  Ranking
-    the bulge by nesting height fails too, because the straight strands do not bulge at all:
-    an arc nested inside one is ranked below it and still swings out past it.
+    **Two generators on one edge** -- a rainbow -- wants the semicircle standing on them.
 
-    So each arc looks at its parent, casts a ray along the way it wants to bulge, and takes a
-    share of the distance to it.  Outermost first, so the parent is always already drawn.  A
-    straight parent gives its children the chord itself to stay behind, which is exactly the
-    constraint the ranking could not express.
+    **Two edges meeting at a corner** wants to leave both generators square-on, at a right
+    angle to the edge it starts from.  For a quadratic that is exactly one control point: the
+    corner of the box the two generators span.  This is what makes the picture respect the
+    gluing.  ``r`` of these at the top left and ``r`` at the top right are not corner arcs at
+    all but the two halves of ``r`` more rainbows, hanging from the top edge and cut in two by
+    the seam where the left and right edges are identified -- ``y_j`` on the left and ``y_j``
+    on the right being one point of the torus.  Leaving square-on at the seam is what lets the
+    halves meet as one smooth rainbow in the universal cover, which is what they are.
 
-    The share is ``h / (h + 1)`` of the gap, where ``h`` counts the levels of nesting still to
-    fit inside this arc.  That spaces a stack evenly: a leaf takes half the room to its
-    parent, an arc with one thing inside it takes two thirds and leaves that thing the same
-    gap again.  A fixed fraction would instead halve the space at every level, and the
-    innermost rainbows -- the ones around ``w``, which are the point of the picture -- would
-    be squashed flat against the edge.
+    **Two opposite edges** has a whole side behind it and is drawn straight.
+
+    TODO: this is readable but not yet beautiful.  Known wants, in the order they show: the
+    bottom rainbows and the seam rainbows are drawn by two unrelated rules and ought to be
+    one; a quadratic is a parabola, so a wide rainbow is visibly not circular near its feet;
+    the fans could be spaced by eye rather than by an even share of the gap; and the straight
+    strands could take a slight bow where there is room for one.
+
+    How much of that it gets is measured against the arc containing it, outermost first, by
+    casting a ray along the way it wants to bulge.  A shape fixed only by its endpoints has
+    nothing left to clear what it holds; ranking by nesting height cannot express it either,
+    since a straight strand has no bulge for its children to rank below.  Only the parent's
+    own curve says it.
+
+    The share is ``h / (h + 1)`` of the gap, ``h`` counting the levels still to fit inside,
+    and it is spent on the **apex** -- a quadratic peaks halfway to its control point, so the
+    control goes twice as far.  Spending it on the control instead quarters the space at every
+    level rather than stepping down evenly, and the innermost rainbow of Q(2,2,2) ends up
+    0.0009 of the domain high, which is to say invisible.
     """
     cut, intervals, height = nesting(diagram)
-    n = 2 * (diagram.x_count + diagram.y_count)
 
     parent = [None] * len(intervals)
     for k, (u, v) in enumerate(intervals):
-        best = None
         for j, (a, b) in enumerate(intervals):
-            if j != k and a < u and v < b and (best is None or b - a < intervals[best][1] - intervals[best][0]):
-                best = j
-        parent[k] = best
+            if j != k and a < u and v < b and (parent[k] is None
+                                               or b - a < intervals[parent[k]][1] - intervals[parent[k]][0]):
+                parent[k] = j
 
     out: list = [None] * len(intervals)
     drawn: list = [None] * len(intervals)
     for k in sorted(range(len(intervals)), key=lambda k: -(intervals[k][1] - intervals[k][0])):
         arc = diagram.arcs[k]
+        one, two = arc.a.side, arc.b.side
         pa, pb = position(diagram, arc.a), position(diagram, arc.b)
-        if OPPOSITE[arc.a.side] == arc.b.side:
-            out[k] = Stroke("line", pa, pb)
-            drawn[k] = [pa, pb]
+        if OPPOSITE[one] == two:
+            out[k], drawn[k] = Stroke("line", pa, pb), [pa, pb]
             continue
 
-        # the stretch of boundary this arc spans runs forward from whichever end the cut puts
-        # first, and the arc arches away from the middle of that stretch
-        forward = (((diagram.boundary_slot(arc.a) - cut) % n)
-                   < ((diagram.boundary_slot(arc.b) - cut) % n))
-        near, far = (arc.a, arc.b) if forward else (arc.b, arc.a)
-        t0 = _perimeter(diagram, near)
-        behind = _boundary_at(t0 + ((_perimeter(diagram, far) - t0) % 4.0) / 2.0)
-
         mid = ((pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0)
-        dx, dy = mid[0] - behind[0], mid[1] - behind[1]
-        reach = math.hypot(dx, dy)
-        if reach < 1e-9:                            # the chord sits on the stretch it spans
-            dx, dy = INWARD[near.side]
-            reach = 1.0
-        dx, dy = dx / reach, dy / reach
+        if one == two:                              # the semicircle on its own feet
+            target = math.dist(pa, pb)
+            dx, dy = INWARD[one]
+        else:                                       # square-on at both ends: the box corner
+            flat, upright = (pa, pb) if one in ("bottom", "top") else (pb, pa)
+            box = (flat[0], upright[1])
+            dx, dy = box[0] - mid[0], box[1] - mid[1]
+            target = math.hypot(dx, dy)
+            if target < 1e-9:
+                dx, dy, target = INWARD[one][0], INWARD[one][1], 0.0
+            else:
+                dx, dy = dx / target, dy / target
 
         above = parent[k]
-        limit = min(0.9 if above is None else _ray_hit(mid, (dx, dy), drawn[above], 0.9), 0.9)
-        lift = limit * height[k] / (height[k] + 1.0)
+        gap = 0.9 if above is None else min(_ray_hit(mid, (dx, dy), drawn[above], 0.9), 0.9)
+        lift = min(target, 2.0 * gap * height[k] / (height[k] + 1.0))
         out[k] = Stroke("curve", pa, pb, (mid[0] + lift * dx, mid[1] + lift * dy))
         drawn[k] = out[k].points(10)
     return out

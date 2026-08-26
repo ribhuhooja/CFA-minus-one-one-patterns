@@ -439,5 +439,34 @@ class Render(unittest.TestCase):
         self.assertLess(without.count("<text"), with_labels.count("<text"))
 
 
+class AgainstTheJS(unittest.TestCase):
+    """The cross-implementation check, which is the strongest one here.
+
+    heegaard-js is a separate implementation with its own layout, so a byte-identical disc
+    table is two programs agreeing rather than one restating itself.  It needs node and the
+    sibling package, so it skips rather than fails when they are not there.
+    """
+
+    def _js(self, diagram):
+        import os
+        import shutil
+        import subprocess
+        root = os.path.join(os.path.dirname(__file__), "..", "..", "heegaard-js")
+        if shutil.which("node") is None or not os.path.isdir(root):
+            self.skipTest("heegaard-js or node is not here")
+        done = subprocess.run(["node", "solve.js", "--quiet"], cwd=root,
+                              input=diagram_to_csv(diagram), capture_output=True, text=True)
+        if done.returncode != 0:
+            self.skipTest(f"heegaard-js would not run: {done.stderr.strip()[:200]}")
+        return done.stdout
+
+    def test_disc_tables_are_byte_identical(self):
+        for maker in (lambda: build("twin-rainbow"), lambda: Q(1, 2, 2), lambda: Q(2, 2, 2)):
+            diagram = maker()
+            with self.subTest(diagram=diagram.name):
+                self.assertEqual(discs_to_csv(enumerate_discs(diagram), diagram),
+                                 self._js(diagram))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -128,32 +128,42 @@ because two embeddings of the same combinatorics are isotopic and give the same 
 `layout.route` supplies one for an arbitrary valid diagram, **without assuming arcs are
 straight or that the diagram comes from a family we know**.
 
-Each arc is **one piece of geometry** — a straight segment or a single quadratic curve —
-and the SVG carries it as one path command, with nothing sampled off it. An arc bulges away
-from the stretch of boundary it spans, so a rainbow arches off its own edge and an arc between
-two edges arches away from the corner between them; an arc joining *opposite* edges has a
-whole side behind it and comes out as the straight strand across the domain that it is.
+Each arc is **one piece of geometry** — a straight segment or a single quadratic — and the
+SVG carries it as one path command, with nothing sampled off it. Each has a shape it would
+take given the room, and takes as much of it as the arc containing it allows:
 
-How far it bulges is the one free number, and it is **measured against the arc containing
-it**, not taken from a table. Each arc casts a ray along the way it wants to bulge, finds its
-parent, and takes a `h/(h+1)` share of the gap, where `h` counts the nesting levels still to
-fit inside it — so a stack of nested arcs is spaced evenly rather than halving at every level,
-and the rainbows around `w` stay legible.
+| | |
+|---|---|
+| two generators on one edge | the semicircle standing on them — a rainbow |
+| two edges meeting at a corner | leaves **both** generators square-on, which for a quadratic is exactly one control point: the corner of the box the two generators span |
+| two opposite edges | a straight segment — there is a whole side behind it |
 
-Two simpler rules were tried and both fail, for the same reason. A shape fixed by its
-endpoints — the semicircle standing on its two generators, the ellipse centred on their shared
-corner — has nothing left to push it clear of what it holds, and in `twin-rainbow` the rainbow
-goes straight through the flattened `y_4 → x_4` arc above it. Ranking the bulge by nesting
-height fails too, because a straight strand does not bulge at all: an arc nested inside one
-ranks below it and still swings out past it. Measuring against the parent is what expresses
-that constraint — a straight parent hands its children its own chord to stay behind.
+Leaving square-on matters because of what those corner arcs are. If the bottom edge carries
+`r` rainbows, then `r` of the arcs at the top left and `r` at the top right are not corner
+arcs at all: they are the two halves of `r` **more** rainbows, hanging from the top edge and
+cut in two by the seam where the left and right edges are identified — `y_j` on the left and
+`y_j` on the right being one point of the torus. Meeting the seam at a right angle is what
+lets the halves join as one smooth rainbow in the universal cover, which is what they are.
+`render_cover` shows them.
+
+How much of its shape an arc gets is **measured against the arc containing it**, outermost
+first, by casting a ray along the way it wants to bulge. A shape fixed only by its endpoints
+has nothing left to clear what it holds; ranking by nesting height cannot express it either,
+since a straight strand has no bulge for its children to rank below. Only the parent's own
+curve says it.
+
+The share is `h/(h+1)` of the gap, `h` counting the levels still to fit inside — and it is
+spent on the **apex**. A quadratic peaks halfway to its control point, so the control goes
+twice as far. Spending it on the control instead quarters the space at every level rather
+than stepping down evenly: the seven rainbows of `Q(2,2,2)` came out at 0.394, 0.169, 0.070,
+0.028, 0.011, 0.0035, 0.0009 of the domain, the innermost invisible. Spent on the apex they
+are an arithmetic sequence, 0.217 down to 0.017 in steps of 0.033.
 
 That is a construction, not a proof, so **the strokes are checked, not assumed**. If any two
 meet, the whole diagram falls back to `route_radial` — straight chords in a disc carried back
 to the square, provably embedded for any valid diagram and much worse to look at.
-`layout.stroked(diagram)` says which you got. Of `Q(i,m,n)` for `i,m` up to 4 and `n` up to 5,
-**47 of 64 draw as strokes**, `twin-rainbow` among them; what still falls back is the large
-`i` and `m` corner of the family.
+`layout.stroked(diagram)` says which you got. All 64 of `Q(i,m,n)` for `i,m` up to 4 and `n`
+up to 5 currently draw as strokes, and so does `twin-rainbow`.
 
 Either way the discs are the same, and a test pins that: any embedding of the same
 combinatorics gives the same answers, so the two routings are a check on the solver.
