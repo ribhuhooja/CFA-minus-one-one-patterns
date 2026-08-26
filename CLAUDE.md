@@ -129,27 +129,42 @@ has the discs.
    solve; and the pictures use `layout.route`, so what is drawn IS the embedding the winding
    numbers were computed in.
 
-   `layout.route` was rewritten for this. Each arc is now ONE piece of geometry -- a segment
-   or a single quadratic -- emitted as one SVG command, nothing sampled. Same edge wants the
-   semicircle on its feet; two edges at a corner want to leave BOTH generators square-on,
-   which for a quadratic is one control point, the corner of the box the generators span;
-   opposite edges are straight. It takes as much of that shape as the arc CONTAINING it
-   allows, found by casting a ray at the parent's own curve, outermost first.
+   `layout.route` was rewritten for this. Each arc is ONE piece of geometry -- a segment or
+   a single CUBIC -- emitted as one SVG command, nothing sampled. Same edge wants the
+   semicircle on its feet; two edges at a corner want the quarter ellipse through both,
+   centred on that corner; opposite edges are straight. A cubic and not a quadratic on
+   purpose: an arc must leave both generators square-on AND be shrinkable to fit what
+   contains it, and one control point cannot do both -- pull it in to shrink and the ends
+   stop being square-on. Two controls on the inward normals hold the angles exactly while the
+   bulge slides.
 
-   Square-on at the seam is not decoration. With `r` rainbows on the bottom, `r` arcs at the
-   top left and `r` at the top right are the two HALVES of `r` more rainbows, hanging from the
-   top edge and cut by the left/right identification (`y_j` left and `y_j` right are one point
-   of the torus). Right angles at the seam are what make the halves join as one smooth rainbow
-   in the cover -- `render_cover` shows it, and the tangents are exactly 0 and 180 degrees.
+   Square-on is not decoration. With `r` rainbows on the bottom, `r` arcs at the top left and
+   `r` at the top right are the two HALVES of `r` more rainbows, hanging from the top edge and
+   cut by the left/right identification (`y_j` left and `y_j` right are one point of the
+   torus). Right angles at the seam are what make the halves join as one smooth rainbow in the
+   cover -- `render_cover` shows it, and the tangents are exactly 0 and 180 degrees.
 
-   Four rules tried that DO NOT work: a shape fixed by its endpoints alone has no freedom left
-   to clear what it nests; ranking bulge by nesting height fails because straight strands have
-   zero bulge, so their children still swing out past them; making only the deepest
-   opposite-edge arc straight makes its neighbours cross it (ALL of them must be straight,
-   which is safe -- straight chords in a convex square between non-interleaving points cannot
-   cross); and spending the room on the CONTROL POINT quarters the space each level, since a
-   quadratic peaks only halfway to its control -- Q(2,2,2)'s innermost rainbow came out 0.0009
-   high. Spend it on the apex and the apexes are an arithmetic sequence.
+   How much of its shape an arc gets is measured against what CONTAINS it, outermost first,
+   by casting a ray at the parent's own curve; the share is `h/(h+1)` of the gap and is spent
+   on the APEX. Then two corrections, both of which cost a session to find:
+   - a corner arc takes a SOFT minimum of want and room. Where a fan is pinched the region is
+     wedge-shaped, so it must give somewhere; a hard min gives nothing until it gives
+     everything, and Q(2,2,2)'s fan sat at full size for seven arcs then piled into a heap
+     (spacing 0.063 -> 0.044, 0.018, 0.014, 0.010, 0.006). Softened it tapers 0.057 -> 0.011.
+     A rainbow barely gives: its size is fixed by its own feet so it cannot over-reach, and
+     softening it destroyed the even ladder (0.217, 0.183, 0.150... became geometric).
+   - then the arc is CHECKED against everything already drawn and shrunk until clear. The ray
+     only asks what is straight ahead: a rainbow beside a strand rising steeply out of the
+     edge next to it clears it at the apex and clips it with its flank, and the two are not
+     nested, so no parent-based rule would ever have compared them.
+
+   Rules tried that DO NOT work, all of them costing time: a shape fixed by its endpoints
+   alone has no freedom left to clear what it nests; ranking bulge by nesting height fails
+   because straight strands have zero bulge, so their children still swing out past them;
+   making only the deepest opposite-edge arc straight makes its neighbours cross it (ALL of
+   them must be straight, which is safe -- straight chords in a convex square between
+   non-interleaving points cannot cross); and spending the room on the CONTROL POINTS quarters
+   the space each level, since a cubic peaks only 3/8 of the way along them.
 
    Not a proof, so strokes are CHECKED and fall back to `route_radial` if any two meet
    (`layout.stroked` says which); 64/64 Q(i,m,n) with i,m<=4, n<=5 currently draw as strokes.
@@ -158,14 +173,13 @@ has the discs.
    revisiting: radial-from-disc for pictures (preserves relative radius so short arcs jam
    against the boundary, and creases along the ray to each corner), and depth-banded sweeps
    parallel to the boundary (provable, but draws a staircase and needs 25-45 points per arc
-   instead of 3).
+   instead of 4).
 
    **TODO -- the user wants the pictures more beautiful still.** Readable is not the same as
-   beautiful. Known wants, recorded also as a TODO in `layout.strokes`: the bottom rainbows
-   and the seam rainbows are drawn by two unrelated rules and ought to be one; a quadratic is
-   a parabola, so a wide rainbow is visibly not circular near its feet; the fans could be
-   spaced by eye rather than by an even share of the gap; and the straight strands could take
-   a slight bow where there is room for one.
+   beautiful. Known wants, recorded also as a TODO in `layout.strokes`: the fans are spaced by
+   an even share of the gap rather than by eye; the straight strands could take a slight bow
+   where there is room for one; and where a fan is pinched the give is spread by a soft
+   minimum, which is a smooth fudge rather than a considered allocation.
 
 2. ~~**A Python package**~~ — **DONE**, `heegaard-py/`. Same algorithm, same answers, reads
    and writes the same two CSV formats; disc lists agree with the JS exactly on every diagram

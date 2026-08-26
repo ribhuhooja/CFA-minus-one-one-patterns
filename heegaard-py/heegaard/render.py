@@ -78,8 +78,9 @@ def beta_paths(diagram: Diagram, to) -> list[str]:
         if stroke.kind == "line":
             out.append(f"{head}L{_fmt(b[0])} {_fmt(b[1])}")
         else:
-            c = to(stroke.control)
-            out.append(f"{head}Q{_fmt(c[0])} {_fmt(c[1])} {_fmt(b[0])} {_fmt(b[1])}")
+            ca, cb = to(stroke.ca), to(stroke.cb)
+            out.append(f"{head}C{_fmt(ca[0])} {_fmt(ca[1])} {_fmt(cb[0])} {_fmt(cb[1])} "
+                       f"{_fmt(b[0])} {_fmt(b[1])}")
     return out
 
 

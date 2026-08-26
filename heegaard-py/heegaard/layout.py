@@ -78,29 +78,37 @@ CORNER = {frozenset(("bottom", "left")): (0.0, 0.0),
           frozenset(("bottom", "right")): (1.0, 0.0),
           frozenset(("top", "left")): (0.0, 1.0),
           frozenset(("top", "right")): (1.0, 1.0)}
+#: how sharply an arc's wanted shape gives way to the room it actually has; smaller is
+#: gentler, and 1 would be the harmonic mean, which gives way far too early
+SOFTNESS = 2.0
+#: rainbows barely give at all -- see strokes()
+SOFTNESS_RAINBOW = 8.0
 #: the direction into the domain from each edge
 INWARD = {"bottom": (0.0, 1.0), "top": (0.0, -1.0),
           "left": (1.0, 0.0), "right": (-1.0, 0.0)}
 
 
+#: control-point offset that makes a cubic match a circular quarter turn
+KAPPA = 0.5522847498
+
+
 @dataclass(frozen=True)
 class Stroke:
-    """One arc of beta as a single piece of geometry: a segment, or an elliptical arc.
+    """One arc of beta as a single piece of geometry: a segment, or one cubic curve.
 
-    ``kind`` is ``"line"`` or ``"arc"``.  An arc is always a quarter or a half of an
-    axis-aligned ellipse, so the centre, the two semi-axes and the angle it sweeps say
-    everything about it, and it goes out as one SVG ``A`` command.  Nothing here is sampled.
-
-    The sweep is stored rather than recovered from the endpoints, because the endpoints do not
-    determine it: two generators on one edge are joined by two semicircles, one of which lies
-    outside the domain entirely, and which one is wanted depends on the edge.  So it is
-    decided once, here.
+    A cubic and not a quadratic, because a quadratic has one control point and that is one
+    too few.  An arc has to leave both its generators at a right angle to the edge it starts
+    from *and* be shrinkable to fit inside whatever contains it, and with a single control
+    those are the same number: pull the control in to shrink the arc and the ends stop being
+    square-on.  Two controls, one on each end's inward normal, hold the angles exactly while
+    the bulge slides freely.  It is still one SVG ``C`` command.
     """
 
     kind: str
     a: tuple
     b: tuple
-    control: tuple = (0.0, 0.0)
+    ca: tuple = (0.0, 0.0)
+    cb: tuple = (0.0, 0.0)
 
     def at(self, f: float) -> tuple:
         """A point a fraction ``f`` along, for sampling and for checking."""
@@ -108,8 +116,9 @@ class Stroke:
             return (self.a[0] + (self.b[0] - self.a[0]) * f,
                     self.a[1] + (self.b[1] - self.a[1]) * f)
         g = 1.0 - f
-        return (g * g * self.a[0] + 2 * g * f * self.control[0] + f * f * self.b[0],
-                g * g * self.a[1] + 2 * g * f * self.control[1] + f * f * self.b[1])
+        w0, w1, w2, w3 = g * g * g, 3 * g * g * f, 3 * g * f * f, f * f * f
+        return (w0 * self.a[0] + w1 * self.ca[0] + w2 * self.cb[0] + w3 * self.b[0],
+                w0 * self.a[1] + w1 * self.ca[1] + w2 * self.cb[1] + w3 * self.b[1])
 
     def points(self, samples: int = 12) -> list:
         if self.kind == "line":
@@ -117,10 +126,6 @@ class Stroke:
         out = [self.at(i / samples) for i in range(samples + 1)]
         out[0], out[-1] = self.a, self.b
         return out
-
-
-def _angle(point, centre, rx, ry) -> float:
-    return math.atan2((point[1] - centre[1]) / ry, (point[0] - centre[0]) / rx)
 
 
 def nesting(diagram: Diagram):
@@ -151,6 +156,17 @@ def nesting(diagram: Diagram):
     return cut, intervals, height
 
 
+def _box(path):
+    xs = [q[0] for q in path]
+    ys = [q[1] for q in path]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+
+def _overlapping(p, q) -> bool:
+    return not (p[2] < q[0] or q[2] < p[0] or p[3] < q[1] or q[3] < p[1])
+
+
 def _ray_hit(origin, direction, path, cap: float) -> float:
     """How far a ray from ``origin`` travels before meeting ``path``.  ``cap`` if it misses."""
     ox, oy = origin
@@ -169,41 +185,41 @@ def _ray_hit(origin, direction, path, cap: float) -> float:
 
 
 def strokes(diagram: Diagram) -> list:
-    """Every arc of beta as one line or one quadratic curve -- three points, nothing sampled.
+    """Every arc of beta as one line or one cubic curve -- four points, nothing sampled.
 
-    Each arc has a shape it would take if it had the room, and it takes as much of it as the
-    arc containing it allows.
+    Each arc has a shape it would take given the room, and takes as much of it as the arc
+    containing it allows.
 
     **Two generators on one edge** -- a rainbow -- wants the semicircle standing on them.
 
-    **Two edges meeting at a corner** wants to leave both generators square-on, at a right
-    angle to the edge it starts from.  For a quadratic that is exactly one control point: the
-    corner of the box the two generators span.  This is what makes the picture respect the
-    gluing.  ``r`` of these at the top left and ``r`` at the top right are not corner arcs at
+    **Two edges meeting at a corner** wants the quarter ellipse through both, centred on the
+    corner.  ``r`` of these at the top left and ``r`` at the top right are not corner arcs at
     all but the two halves of ``r`` more rainbows, hanging from the top edge and cut in two by
     the seam where the left and right edges are identified -- ``y_j`` on the left and ``y_j``
-    on the right being one point of the torus.  Leaving square-on at the seam is what lets the
-    halves meet as one smooth rainbow in the universal cover, which is what they are.
+    on the right being one point of the torus.  Both shapes leave their generators square-on,
+    and that is what lets the halves meet as one smooth rainbow in the universal cover.
 
     **Two opposite edges** has a whole side behind it and is drawn straight.
 
-    TODO: this is readable but not yet beautiful.  Known wants, in the order they show: the
-    bottom rainbows and the seam rainbows are drawn by two unrelated rules and ought to be
-    one; a quadratic is a parabola, so a wide rainbow is visibly not circular near its feet;
-    the fans could be spaced by eye rather than by an even share of the gap; and the straight
-    strands could take a slight bow where there is room for one.
-
-    How much of that it gets is measured against the arc containing it, outermost first, by
-    casting a ray along the way it wants to bulge.  A shape fixed only by its endpoints has
-    nothing left to clear what it holds; ranking by nesting height cannot express it either,
-    since a straight strand has no bulge for its children to rank below.  Only the parent's
-    own curve says it.
+    Every arc keeps its angles whatever else happens to it, because the two controls sit on
+    the inward normals and only their length changes.  What changes is one number: how much of
+    its shape it gets.  That is measured against the arc containing it, outermost first, by
+    casting a ray along the way it bulges -- a shape fixed only by its endpoints has nothing
+    left to clear what it holds, and ranking by nesting height cannot express it either, since
+    a straight strand has no bulge for its children to rank below.
 
     The share is ``h / (h + 1)`` of the gap, ``h`` counting the levels still to fit inside,
-    and it is spent on the **apex** -- a quadratic peaks halfway to its control point, so the
-    control goes twice as far.  Spending it on the control instead quarters the space at every
-    level rather than stepping down evenly, and the innermost rainbow of Q(2,2,2) ends up
-    0.0009 of the domain high, which is to say invisible.
+    spent on the **apex**: spend it on the controls instead and the space quarters at every
+    level rather than stepping down evenly.  And it is taken as a *soft* minimum against the
+    shape the arc wanted.  Where a fan runs into something -- the corner arcs meeting a
+    straight strand -- the region left is wedge-shaped, so it must be squeezed somewhere; a
+    hard minimum squeezes nothing until it squeezes everything, and the fan stays at full size
+    and then piles into a heap at the first arc that meets the obstruction.
+
+    TODO: better, but the user still wants these more beautiful.  Known wants: the fans are
+    spaced by an even share of the gap rather than by eye; the straight strands could take a
+    slight bow where there is room for one; and where a fan is pinched the give is spread by
+    a soft minimum, which is a smooth fudge rather than a considered allocation.
     """
     cut, intervals, height = nesting(diagram)
 
@@ -216,40 +232,78 @@ def strokes(diagram: Diagram) -> list:
 
     out: list = [None] * len(intervals)
     drawn: list = [None] * len(intervals)
+    boxes: list = [None] * len(intervals)
     for k in sorted(range(len(intervals)), key=lambda k: -(intervals[k][1] - intervals[k][0])):
         arc = diagram.arcs[k]
         one, two = arc.a.side, arc.b.side
         pa, pb = position(diagram, arc.a), position(diagram, arc.b)
         if OPPOSITE[one] == two:
             out[k], drawn[k] = Stroke("line", pa, pb), [pa, pb]
+            boxes[k] = _box(drawn[k])
             continue
 
-        mid = ((pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0)
+        na, nb = INWARD[one], INWARD[two]
+        crowds = one != two
         if one == two:                              # the semicircle on its own feet
-            target = math.dist(pa, pb)
-            dx, dy = INWARD[one]
-        else:                                       # square-on at both ends: the box corner
-            flat, upright = (pa, pb) if one in ("bottom", "top") else (pb, pa)
-            box = (flat[0], upright[1])
-            dx, dy = box[0] - mid[0], box[1] - mid[1]
-            target = math.hypot(dx, dy)
-            if target < 1e-9:
-                dx, dy, target = INWARD[one][0], INWARD[one][1], 0.0
-            else:
-                dx, dy = dx / target, dy / target
+            reach_a = reach_b = 4.0 / 3.0 * math.dist(pa, pb) / 2.0
+        else:                                       # the quarter ellipse about their corner
+            corner = CORNER[frozenset((one, two))]
+            across = max(abs(pa[0] - corner[0]), abs(pb[0] - corner[0]))
+            up = max(abs(pa[1] - corner[1]), abs(pb[1] - corner[1]))
+            flat_first = one in ("bottom", "top")
+            reach_a = KAPPA * (up if flat_first else across)
+            reach_b = KAPPA * (across if flat_first else up)
 
+        # the apex is 3/8 of the way along the two control offsets put together
+        vx = 3.0 / 8.0 * (reach_a * na[0] + reach_b * nb[0])
+        vy = 3.0 / 8.0 * (reach_a * na[1] + reach_b * nb[1])
+        want = math.hypot(vx, vy)
+        if want < 1e-12:
+            out[k], drawn[k] = Stroke("line", pa, pb), [pa, pb]
+            boxes[k] = _box(drawn[k])
+            continue
+        dx, dy = vx / want, vy / want
+
+        mid = ((pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0)
         above = parent[k]
         gap = 0.9 if above is None else min(_ray_hit(mid, (dx, dy), drawn[above], 0.9), 0.9)
-        lift = min(target, 2.0 * gap * height[k] / (height[k] + 1.0))
-        out[k] = Stroke("curve", pa, pb, (mid[0] + lift * dx, mid[1] + lift * dy))
+        allowed = gap * height[k] / (height[k] + 1.0)
+        # A rainbow takes the room it wants outright: its size is fixed by its own feet, it
+        # cannot over-reach, and a fan of them is already evenly stepped.  A corner arc is the
+        # one that grows without bound as its generators move away from the corner, so it is
+        # the one that runs into things, and it gives way early -- a *soft* minimum against
+        # the room rather than a hard one.  A hard minimum squeezes nothing until it squeezes
+        # everything: the fan stays at full size and then piles into a heap at the first arc
+        # that meets the obstruction, which is exactly what it used to do.
+        give = SOFTNESS if crowds else SOFTNESS_RAINBOW
+        apex = (want ** -give + allowed ** -give) ** (-1.0 / give)
+        share = apex / want
+
+        def shaped(share: float) -> Stroke:
+            return Stroke("curve", pa, pb,
+                          (pa[0] + share * reach_a * na[0], pa[1] + share * reach_a * na[1]),
+                          (pb[0] + share * reach_b * nb[0], pb[1] + share * reach_b * nb[1]))
+
+        # The ray only asks how far it is to the parent straight ahead, and that is neither the
+        # only direction an arc can meet something nor the only thing it can meet.  A rainbow
+        # standing beside a straight strand that rises steeply out of the edge next to it
+        # clears the strand at its apex and clips it with its flank -- and the two are not
+        # nested at all, so no amount of care about parents would have compared them.  So the
+        # estimate is checked against everything already drawn, and given up on a bit at a
+        # time until the arc really is clear.  Outermost first, so what is already drawn is
+        # everything with a longer span than this one.
+        out[k] = shaped(share)
+        for _ in range(16):
+            here = out[k].points(10)
+            box = _box(here)
+            if not any(_overlapping(box, boxes[j]) and crossings_between([here, drawn[j]])
+                       for j in range(len(drawn)) if drawn[j] is not None):
+                break
+            share *= 0.8
+            out[k] = shaped(share)
         drawn[k] = out[k].points(10)
+        boxes[k] = _box(drawn[k])
     return out
-
-
-def _box(path):
-    xs = [q[0] for q in path]
-    ys = [q[1] for q in path]
-    return (min(xs), min(ys), max(xs), max(ys))
 
 
 def route(diagram: Diagram, samples: int = 12) -> list[list[tuple[float, float]]]:

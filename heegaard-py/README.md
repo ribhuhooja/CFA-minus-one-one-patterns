@@ -128,36 +128,53 @@ because two embeddings of the same combinatorics are isotopic and give the same 
 `layout.route` supplies one for an arbitrary valid diagram, **without assuming arcs are
 straight or that the diagram comes from a family we know**.
 
-Each arc is **one piece of geometry** — a straight segment or a single quadratic — and the
-SVG carries it as one path command, with nothing sampled off it. Each has a shape it would
-take given the room, and takes as much of it as the arc containing it allows:
+Each arc is **one piece of geometry** — a straight segment or a single cubic — and the SVG
+carries it as one path command, with nothing sampled off it. Each has a shape it would take
+given the room:
 
 | | |
 |---|---|
 | two generators on one edge | the semicircle standing on them — a rainbow |
-| two edges meeting at a corner | leaves **both** generators square-on, which for a quadratic is exactly one control point: the corner of the box the two generators span |
+| two edges meeting at a corner | the quarter ellipse through both, centred on that corner |
 | two opposite edges | a straight segment — there is a whole side behind it |
 
-Leaving square-on matters because of what those corner arcs are. If the bottom edge carries
-`r` rainbows, then `r` of the arcs at the top left and `r` at the top right are not corner
-arcs at all: they are the two halves of `r` **more** rainbows, hanging from the top edge and
-cut in two by the seam where the left and right edges are identified — `y_j` on the left and
-`y_j` on the right being one point of the torus. Meeting the seam at a right angle is what
-lets the halves join as one smooth rainbow in the universal cover, which is what they are.
-`render_cover` shows them.
+A **cubic**, not a quadratic, and that is the point rather than a detail. An arc has to leave
+both its generators at a right angle to its edge *and* be shrinkable to fit inside whatever
+contains it. With one control point those are the same number: pull it in to shrink the arc
+and the ends stop being square-on. Two controls, one on each end's inward normal, hold the
+angles exactly while the bulge slides freely.
 
-How much of its shape an arc gets is **measured against the arc containing it**, outermost
-first, by casting a ray along the way it wants to bulge. A shape fixed only by its endpoints
-has nothing left to clear what it holds; ranking by nesting height cannot express it either,
-since a straight strand has no bulge for its children to rank below. Only the parent's own
-curve says it.
+The angles matter because of what the corner arcs are. If the bottom edge carries `r`
+rainbows, then `r` arcs at the top left and `r` at the top right are not corner arcs at all:
+they are the two halves of `r` **more** rainbows, hanging from the top edge and cut in two by
+the seam where the left and right edges are identified — `y_j` on the left and `y_j` on the
+right being one point of the torus. Meeting the seam at exactly a right angle is what lets the
+halves join as one smooth rainbow in the universal cover. `render_cover` shows them.
 
-The share is `h/(h+1)` of the gap, `h` counting the levels still to fit inside — and it is
-spent on the **apex**. A quadratic peaks halfway to its control point, so the control goes
-twice as far. Spending it on the control instead quarters the space at every level rather
-than stepping down evenly: the seven rainbows of `Q(2,2,2)` came out at 0.394, 0.169, 0.070,
-0.028, 0.011, 0.0035, 0.0009 of the domain, the innermost invisible. Spent on the apex they
-are an arithmetic sequence, 0.217 down to 0.017 in steps of 0.033.
+How much of its shape an arc gets is **measured against what contains it**, outermost first,
+by casting a ray along the way it bulges. A shape fixed only by its endpoints has nothing left
+to clear what it holds; ranking by nesting height cannot express it either, since a straight
+strand has no bulge for its children to rank below.
+
+The share is `h/(h+1)` of the gap, `h` counting the levels still to fit inside, and it is
+spent on the **apex**. A cubic peaks three-eighths of the way along its control offsets, so
+spending the room on the controls quarters the space at every level instead of stepping down
+evenly: the seven rainbows of `Q(2,2,2)` came out at 0.394, 0.169, 0.070, … , 0.0009 of the
+domain, the innermost invisible.
+
+Two things then correct that estimate:
+
+- A corner arc takes a **soft** minimum of what it wants and what it has. Where a fan runs
+  into something the region left for it is wedge-shaped, so it must be squeezed somewhere; a
+  hard minimum squeezes nothing until it squeezes everything, and the fan of `Q(2,2,2)` used
+  to sit at full size for seven arcs and then pile into a heap, its spacing dropping from
+  0.063 to 0.044, 0.018, 0.014, 0.010, 0.006. Softened it tapers 0.057 → 0.011. A rainbow
+  barely gives at all: its size is fixed by its own feet, so it cannot over-reach.
+- Then the arc is **checked against everything already drawn** and gives up a bit at a time
+  until it really is clear. The ray only asks what is straight ahead, and that is neither the
+  only direction nor the only obstruction: a rainbow beside a strand rising steeply out of the
+  edge next to it clears the strand at its apex and clips it with its flank — and the two are
+  not nested, so no amount of care about parents would ever have compared them.
 
 That is a construction, not a proof, so **the strokes are checked, not assumed**. If any two
 meet, the whole diagram falls back to `route_radial` — straight chords in a disc carried back
