@@ -97,6 +97,43 @@ def _number(value: str):
         return value
 
 
+def discs_from_csv(text: str) -> list:
+    """Read a disc table back.
+
+    Only four columns carry information: source, target, the offset (which run of arcs of
+    beta the disc is) and the path (how it closes up along the alpha curves).  The chord word
+    and the U power are consequences -- the word is recomputed here and checked against the
+    file, which catches a table written by something that disagrees about the Reeb naming.
+    """
+    from .solver import Disc, reeb_chords            # here, to keep the import graph a tree
+
+    info, _, columns, body = _split(text, DISCS_FORMAT)
+    for column in ("source", "target", "U", "arcs", "path"):
+        if column not in columns:
+            raise DiagramError(f'the disc table has no "{column}" column')
+    at = {name: k for k, name in enumerate(columns)}
+
+    discs = []
+    for row, line in enumerate(body, start=1):
+        f = [v.strip() for v in line.split(",")]
+        try:
+            directions = f[at["path"]].split()
+            chords = reeb_chords(directions)
+            word = "".join(c.replace("rho_", "P") for c in chords)
+            if "chords" in at and f[at["chords"]] != word:
+                raise ValueError(f'path "{f[at["path"]]}" spells {word or "no chords"}, '
+                                 f'but the file says {f[at["chords"]] or "no chords"}')
+            discs.append(Disc(source=f[at["source"]], target=f[at["target"]],
+                              offset=int(f[at["arcs"]]), directions=directions,
+                              chords=chords, U=int(f[at["U"]]), area=0.0))
+        except ValueError as exc:
+            raise DiagramError(f"row {row}: {exc}") from None
+
+    if "count" in info and int(info["count"]) != len(discs):
+        raise DiagramError(f'the file says {info["count"]} discs but has {len(discs)}')
+    return discs
+
+
 def discs_to_csv(discs, diagram: Diagram | None = None,
                  convention: str = "composed", sort: bool = True) -> str:
     lines = [f"# {DISCS_FORMAT}"]

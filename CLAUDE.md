@@ -11,7 +11,8 @@ Three packages, no dependencies, no build step. Modules are quarantined by langu
   joining its endpoints whose enclosed region contains no forbidden point. Knows nothing about
   Heegaard diagrams.
 - **`heegaard-py/`** — the same, in Python: a `Diagram` class you build with `add_arc`, the
-  validator, `Q(i,m,n)`, and a solver. CSV in, CSV out.
+  validator, a named-diagram catalogue in `patterns.py` (`qimn`, `twin-rainbow`, ...), a
+  solver, and an SVG visualiser. CSV in, CSV or SVG out.
 - **`heegaard-js/`** — the diagrams. Builds `Q(i,m,n)` as `H(r,s)`, draws it, lifts beta to the
   universal cover, feeds pieces of beta to the solver, reads off Reeb chords and U powers.
 
@@ -119,7 +120,33 @@ has the discs.
    discs, and modularisation around those two formats. Everything below depends on this.
    Open questions the user has not settled: whether the diagram format carries geometry or
    only combinatorics (leaning combinatorics + an optional layout section), and how a
-   generator is identified across files (currently `x_13` / `y_7`).
+   generator is identified across files (currently `x_13` / `y_7`). ~~Also a way to
+   visualize this from the CSV.~~ — **the visualiser is DONE**, `heegaard-py/heegaard/render.py`
+   plus `python3 -m heegaard draw`: domain, universal cover and discs as SVG, from the CSV and
+   nothing else. Two facts worth keeping: a disc's polygon can be rebuilt exactly from its
+   (source, offset, path), which is what `solver.attach_regions` does, so a disc table written
+   by the JS draws here without re-solving — verified byte-identical to drawing Python's own
+   solve; and the pictures use `layout.route`, so what is drawn IS the embedding the winding
+   numbers were computed in.
+
+   `layout.route` was rewritten for this. Each arc is now ONE piece of geometry -- a segment
+   or a single quadratic -- emitted as one SVG command, nothing sampled. Bulge is measured
+   against the containing arc by casting a ray at it, taking `h/(h+1)` of the gap so nested
+   stacks space evenly. Three rules that were tried and DO NOT work, in order: a shape fixed
+   by its endpoints (semicircle on its feet, ellipse centred on the corner) has no freedom
+   left to clear what it nests; ranking bulge by nesting height fails because straight strands
+   have zero bulge, so their children still swing out past them; and making only the deepest
+   opposite-edge arc straight makes its neighbours cross it -- ALL opposite-edge arcs must be
+   straight, which is safe because straight chords in a convex square between non-interleaving
+   points cannot cross. Not a proof, so strokes are CHECKED and the diagram falls back to
+   `route_radial` if any two meet (`layout.stroked` says which). 47 of 64 Q(i,m,n) with i,m<=4
+   and n<=5 draw as strokes; the large i,m corner falls back. Also: `crossings_between` needed
+   a tolerance -- arcs sharing a line give determinants of 0.0 against 3e-18, which a strict
+   `> 0` test calls a crossing. Two routings NOT worth revisiting: radial-from-disc for
+   pictures (preserves relative radius so short arcs jam against the boundary, and creases
+   along the ray to each corner), and depth-banded sweeps parallel to the boundary (provable,
+   but draws a staircase and needs 25-45 points per arc instead of 3).
+
 2. ~~**A Python package**~~ — **DONE**, `heegaard-py/`. Same algorithm, same answers, reads
    and writes the same two CSV formats; disc lists agree with the JS exactly on every diagram
    tried and `solve` emits a byte-identical CSV. About 9x slower than JS. Its layout does NOT

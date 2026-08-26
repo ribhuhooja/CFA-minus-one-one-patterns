@@ -54,6 +54,8 @@ class Disc:
     chords: list[str]
     U: int
     area: float
+    #: the closed polygon it covers in the universal cover, if anyone asked for it
+    region: list[tuple[float, float]] | None = None
 
     @property
     def word(self) -> str:
@@ -249,6 +251,18 @@ def _between(records, lo: float, hi: float):
     return next((r for r in records if low < r["t"] < high), None)
 
 
+def _lattice(point, direction: str, leaving: bool) -> tuple[int, int]:
+    """The lattice point a path step runs to (leaving) or comes from (arriving)."""
+    x, y = point
+    if direction == "E":
+        return (math.ceil(x) if leaving else math.floor(x), int(round(y)))
+    if direction == "W":
+        return (math.floor(x) if leaving else math.ceil(x), int(round(y)))
+    if direction == "N":
+        return (int(round(x)), math.ceil(y) if leaving else math.floor(y))
+    return (int(round(x)), math.floor(y) if leaving else math.ceil(y))
+
+
 def _solve_piece(piece: Piece, z_eps: float, w_point, max_path: int):
     """Find the disc this piece bounds, or None."""
     nodes = piece.track.nodes
@@ -267,17 +281,7 @@ def _solve_piece(piece: Piece, z_eps: float, w_point, max_path: int):
     xs, xe = first_node["point"], last_node["point"]
     edge_s, edge_e = first_node["edge"], last_node["edge"]
 
-    def lattice(point, direction, leaving: bool):
-        x, y = point
-        if direction == "E":
-            return (math.ceil(x) if leaving else math.floor(x), int(round(y)))
-        if direction == "W":
-            return (math.floor(x) if leaving else math.ceil(x), int(round(y)))
-        if direction == "N":
-            return (int(round(x)), math.ceil(y) if leaving else math.floor(y))
-        return (int(round(x)), math.floor(y) if leaving else math.ceil(y))
-
-    vs, ve = lattice(xs, first, True), lattice(xe, last, False)
+    vs, ve = _lattice(xs, first, True), _lattice(xe, last, False)
     t_vs = 1.0 if first in ("E", "N") else 0.0
     t_ve = 0.0 if last in ("E", "N") else 1.0
     on_s = piece.by_edge.get(edge_s, [])
@@ -368,7 +372,7 @@ def _check(path, piece: Piece, z_eps: float, w_point):
         dx, dy = bx - ax, by - ay
         directions.append(("E" if dx > 0 else "W") if abs(dx) > abs(dy)
                           else ("N" if dy > 0 else "S"))
-    return directions, power, area
+    return directions, power, area, polygon
 
 
 def _basepoints(diagram: Diagram):
@@ -405,20 +409,34 @@ def _basepoints(diagram: Diagram):
     return z_eps, w_point
 
 
-def enumerate_discs(diagram: Diagram) -> list[Disc]:
+def lifted_track(diagram: Diagram) -> tuple[Track, int]:
+    """Three circuits of beta, shifted so the middle one sits in positive tiles.
+
+    The middle circuit is the one discs are enumerated from -- it has a whole circuit of
+    room either side of it, which is as far as a disc can reach.  Anything that wants to
+    rebuild a disc's geometry must lift the curve exactly this way, so this is shared rather
+    than repeated.
+    """
+    circuit = len(diagram.components()[0])
+    probe = lift(diagram, circuit * 3 + 1)
+    lo_i = min(n["tile"][0] for n in probe.nodes) - 1
+    lo_j = min(n["tile"][1] for n in probe.nodes) - 1
+    return lift(diagram, circuit * 3 + 1, (1 - lo_i, 1 - lo_j)), circuit
+
+
+def enumerate_discs(diagram: Diagram, keep_regions: bool = False) -> list[Disc]:
     """Every disc of the diagram.
 
     From each generator, run both ways along beta as far as the point where beta comes back to
     it -- one circuit each way.  Every disc with that source is somewhere in that range.
+
+    ``keep_regions`` also hands back the polygon each disc covers in the universal cover.  It
+    costs nothing to keep -- the check has already built it -- but it is a lot of points, so
+    only a caller that means to draw them should ask.
     """
     diagram.validate()
     z_eps, w_point = _basepoints(diagram)
-    circuit = len(diagram.components()[0])
-
-    probe = lift(diagram, circuit * 3 + 1)
-    lo_i = min(n["tile"][0] for n in probe.nodes) - 1
-    lo_j = min(n["tile"][1] for n in probe.nodes) - 1
-    track = lift(diagram, circuit * 3 + 1, (1 - lo_i, 1 - lo_j))
+    track, circuit = lifted_track(diagram)
     max_path = 4 * len(diagram.arcs) + 8
 
     discs: list[Disc] = []
@@ -431,10 +449,71 @@ def enumerate_discs(diagram: Diagram) -> list[Disc]:
                 found = _solve_piece(piece, z_eps, w_point, max_path)
                 if found is None:
                     continue
-                directions, power, area = found
+                directions, power, area, polygon = found
                 discs.append(Disc(
                     source=track.nodes[start]["name"],
                     target=track.nodes[start + direction * step]["name"],
                     offset=direction * step, directions=directions,
-                    chords=reeb_chords(directions), U=power, area=area))
+                    chords=reeb_chords(directions), U=power, area=area,
+                    region=list(polygon) if keep_regions else None))
+    return discs
+
+
+def _replay(directions: list[str], xs, xe) -> list[tuple[float, float]]:
+    """Rebuild the alpha path of a disc from the directions the CSV recorded.
+
+    The path is a start point on an alpha edge, then whole lattice points, then an end point
+    on an alpha edge -- so one direction per step is enough to put it back.  The first step
+    leaves ``xs`` for the lattice point ahead of it, the last arrives at ``xe``, and every
+    step in between is one unit of the grid.
+    """
+    if len(directions) == 1:                      # both ends on one alpha edge
+        return [xs, xe]
+    v = _lattice(xs, directions[0], True)
+    path = [xs, (float(v[0]), float(v[1]))]
+    for step in directions[1:-1]:
+        dx, dy = DIRECTIONS[step]
+        v = (v[0] + dx, v[1] + dy)
+        path.append((float(v[0]), float(v[1])))
+    path.append(xe)
+    return path
+
+
+def attach_regions(diagram: Diagram, discs) -> list[Disc]:
+    """Fill in ``region`` and ``area`` for discs that arrived without them.
+
+    A disc read back from a CSV is source, target, offset and a list of directions, which is
+    all the geometry there ever was: the offset says which run of arcs of beta it is, and the
+    directions say how the alpha path closes it up.  So the polygon can be rebuilt exactly,
+    and this is what lets a picture be drawn from a disc list someone else computed -- the JS
+    solver, say -- without solving anything again.
+
+    Raises if a disc does not describe a run of this diagram's beta, which makes it a check on
+    the file as well as a way to draw it.
+    """
+    diagram.validate()
+    track, circuit = lifted_track(diagram)
+    start_of = {track.nodes[k]["name"]: k for k in range(circuit, 2 * circuit)}
+
+    for disc in discs:
+        if disc.region is not None:
+            continue
+        start = start_of.get(disc.source)
+        if start is None:
+            raise ValueError(f"{disc.source} is not a generator of {diagram.name}")
+        if not disc.offset or abs(disc.offset) > circuit:
+            raise ValueError(f"{disc.source}: an offset of {disc.offset} is not a run of "
+                             f"beta, whose circuit is {circuit} arcs")
+        piece = Piece(track, start, 1 if disc.offset > 0 else -1)
+        for _ in range(abs(disc.offset)):
+            if not piece.extend():
+                raise ValueError(f"{disc.source}{disc.offset:+d} runs off the lifted curve")
+        landed = track.nodes[start + disc.offset]
+        if landed["name"] != disc.target:
+            raise ValueError(f"{disc.source}{disc.offset:+d} arrives at {landed['name']}, "
+                             f"but the disc says {disc.target}")
+
+        path = _replay(disc.directions, track.nodes[start]["point"], landed["point"])
+        disc.region = list(piece.points) + list(reversed(path[1:-1]))
+        disc.area = _signed_area(disc.region)
     return discs
