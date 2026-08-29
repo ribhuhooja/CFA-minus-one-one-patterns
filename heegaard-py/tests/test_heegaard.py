@@ -527,12 +527,20 @@ class QIsH(unittest.TestCase):
     """Q(i,m,n) is H(1+2im-m, n+3m-2mn+4imn-4im-2)."""
 
     def test_the_arcs_are_the_same(self):
-        for i in range(1, 5):
-            for m in range(2, 5):
-                for n in range(2, 5):
+        """150 diagrams, the largest Q(6,6,6) = H(67,670) at 947 arcs.  Checked by hand up to
+        Q(9,25,25) = H(426,20448), 22199 arcs, which is too slow to keep here."""
+        for i in range(1, 7):
+            for m in range(2, 7):
+                for n in range(2, 7):
                     r, s = q_parameters(i, m, n)
                     with self.subTest(i=i, m=m, n=n, r=r, s=s):
                         self.assertEqual(arc_set(H(r, s)), arc_set(Q(i, m, n)))
+
+    def test_a_large_one(self):
+        i, m, n = 10, 10, 10
+        r, s = q_parameters(i, m, n)
+        self.assertEqual((r, s), (191, 3438))
+        self.assertEqual(arc_set(H(r, s)), arc_set(Q(i, m, n)))
 
     def test_the_discs_are_the_same(self):
         for i, m, n in [(1, 2, 2), (2, 2, 2), (1, 3, 2), (2, 3, 3), (1, 4, 4)]:

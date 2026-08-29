@@ -194,7 +194,11 @@ has the discs.
    Dependent arcs number `|sigma|` when `sigma < 0` and `sigma + 2` when not; the positive case
    is Fig 15(b), needing a small rainbow at each end because a strand cannot be reversed.
    `sigma` closed form == walking the main region, checked on 200 pairs.
-   **Q(i,m,n) IS H(1+2im-m, n+3m-2mn+4imn-4im-2)** -- 36/36 arc for arc, disc tables identical.
+   **Q(i,m,n) IS H(1+2im-m, n+3m-2mn+4imn-4im-2)** -- 150/150 arc for arc for i,m,n up to 6,
+   disc tables identical, and checked by hand out to Q(9,25,25) = H(426,20448), 22199 arcs.
+   Note H(3,1) is form (a), NOT the two-rainbow form: sigma(3,1) = -1. Form (b) needs
+   sigma strands between its turning rainbows so it is not even constructible when sigma
+   is negative. The nearest form (b) neighbours are H(2,1), H(3,2), H(3,3).
    **`twin-rainbow` is Q(1,2,1) = H(3,1)**; the earlier note here that it was outside the Q
    family was wrong, and wrong only because `qmn.py` refuses `n < 2`. H has no such limit and
    handles `r < 0` (the picture upside down, Fig 16). The re-cut uses real geometry on purpose:
