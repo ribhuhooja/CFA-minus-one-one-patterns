@@ -43,8 +43,23 @@ def schubert(r: int, s: int) -> tuple:
     return 2 * s + 4 * a, (1 if r > 0 else -1) * (2 * a - 1)
 
 
+def reduced(p: int, q: int) -> int:
+    """``q`` brought into ``|q| < p/2``, which is the range it is normally written in.
+
+    ``q`` is only defined modulo ``p``, and of the two representatives with ``|q| < p`` this
+    takes the smaller.  Worth knowing: :func:`schubert` already lands in this range without
+    being asked, because ``|q| = 2|r|-1`` and ``p/2 = s + 2|r|``, so the condition is just
+    ``s > -1``.
+    """
+    if p <= 0:
+        raise ValueError(f"b({p},{q}): p must be positive")
+    out = q % p
+    return out - p if out > p // 2 else out
+
+
 def normalise(p: int, q: int) -> int:
-    """``q`` brought into ``0 < q < p``.  It is only ever defined modulo ``p``."""
+    """``q`` brought into ``0 < q < p``.  The other convention; :func:`reduced` is the one
+    used here."""
     if p <= 0:
         raise ValueError(f"b({p},{q}): p must be positive")
     return q % p
@@ -83,22 +98,28 @@ def readings(p: int, q: int) -> list:
 def conway(p: int, q: int, reduce: bool = True) -> tuple:
     """The Conway form ``C(a_1, ..., a_n)``: the continued fraction of ``p/q``.
 
-    With ``reduce`` (the default) ``q`` is first brought into ``0 < q < p``, which is where it
-    is only defined anyway and which is what makes every ``a_i`` positive.  Without it the
-    fraction is taken as handed over, and a negative ``q`` gives a leading negative term.
+    The terms carry the sign of ``q``.  Expanding ``p/|q|`` gives positive terms, and the
+    mirror -- ``q -> -q`` -- negates every one of them, which is what a mirrored tangle
+    should do and what keeps :func:`mirror` agreeing with itself in all three names.  Taking
+    the continued fraction of a negative ``p/q`` directly would instead give one negative term
+    and the rest positive, which says the same thing far less legibly.
 
     >>> conway(14, 5)
     (2, 1, 4)
+    >>> conway(14, -5)
+    (-2, -1, -4)
     """
     if q == 0:
         raise ValueError(f"b({p},{q}): q must not be zero")
     if gcd(p, abs(q)) != 1:
         raise ValueError(f"b({p},{q}): gcd is {gcd(p, abs(q))}, so this is not a link")
-    top, bottom = p, (normalise(p, q) if reduce else q)
+    here = reduced(p, q) if reduce else q
+    sign = 1 if here > 0 else -1
+    top, bottom = p, abs(here)
     out = []
     while bottom:
         whole = top // bottom
-        out.append(whole)
+        out.append(sign * whole)
         top, bottom = bottom, top - whole * bottom
     return tuple(out)
 
@@ -116,9 +137,10 @@ def schubert_of_conway(*terms: int) -> tuple:
         if value == 0:
             raise ValueError(f"C{terms}: the fraction divides by zero part way along")
         value = term + 1 / value
-    if value <= 0:
-        raise ValueError(f"C{terms}: gives p/q = {value}, which is not a link")
-    return value.numerator, value.denominator
+    if value == 0:
+        raise ValueError(f"C{terms}: gives p/q = 0, which is not a link")
+    # Fraction keeps the sign on top; b(p, q) keeps p positive and signs q
+    return abs(value.numerator), value.denominator * (1 if value > 0 else -1)
 
 
 # ---------------------------------------------------------------- straight through
@@ -137,8 +159,30 @@ def parameters_of_conway(*terms: int) -> tuple:
     return found[0]
 
 
+def mirror(p: int, q: int) -> tuple:
+    """The mirror image: ``b(p, -q)``.  Negating ``q`` negates every Conway term."""
+    return p, reduced(p, -q)
+
+
+def inverse(p: int, q: int) -> tuple:
+    """``b(p, q^-1 mod p)``, the other presentation Schubert's theorem allows."""
+    if gcd(p, abs(q)) != 1:
+        raise ValueError(f"b({p},{q}): q is not invertible mod p")
+    return p, reduced(p, pow(q % p, -1, p))
+
+
+def equivalent(p: int, q: int, other_p: int, other_q: int) -> bool:
+    """Schubert: ``b(p,q) = b(p',q')`` exactly when ``p = p'`` and ``q' = q^(+/-1) mod p``."""
+    if p != other_p:
+        return False
+    if gcd(p, abs(q)) != 1 or gcd(p, abs(other_q)) != 1:
+        return False
+    here, there = q % p, other_q % p
+    return there in (here, pow(here, -1, p))
+
+
 def name(r: int, s: int) -> str:
     """All three names of one pattern, for a caption or a table."""
     p, q = schubert(r, s)
     terms = ",".join(str(a) for a in conway(p, q))
-    return f"H({r},{s}) = b({p},{normalise(p, q)}) = C({terms})"
+    return f"H({r},{s}) = b({p},{q}) = C({terms})"

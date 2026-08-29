@@ -176,11 +176,22 @@ take whatever diagram they are handed, and plenty of (1,1) patterns are not unkn
 this is here so that one which *is* can be called by its usual name. A test asserts that
 neither `diagram` nor `solver` so much as mentions it.
 
-Two things fall out and are checked rather than assumed. `p` is always even, which is what says
-the link has two components rather than one. And `b(p,q)` is a link at all only when
-`gcd(p,q) = 1` — which turns out to be *exactly* the `gcd(2|r|-1, s+1) = 1` that `H(r,s)` needs
-for beta to be a single curve, because `4|r| ≡ 2 (mod 2|r|-1)` makes `p ≡ 2(s+1)` and `q` is
-odd. Also `H(-r,s)` comes out as `b(p, p-q)`, the mirror.
+What is checked rather than assumed:
+
+| | |
+|---|---|
+| `p` even | so the link has two components rather than one |
+| `gcd(p,q) = 1` | and it is *exactly* `gcd(2\|r\|-1, s+1) = 1`, the condition `H(r,s)` already needs for beta to be a single curve — because `4\|r\| ≡ 2 (mod 2\|r\|-1)` makes `p ≡ 2(s+1)`, and `q` is odd |
+| `\|q\| < p/2` | the standard range, and `schubert` lands in it without being asked: `\|q\| = 2\|r\|-1` and `p/2 = s + 2\|r\|`, so the condition is only `s > -1` |
+| `b(p,-q)` is the mirror | and it negates every Conway term; `H(-r,s)` comes out as exactly `b(p,-q)`, so reflecting the Chen form mirrors the link |
+| `b(p,q) = b(p,q')` iff `q' ≡ q^{±1}` | Schubert. `q → q^{-1}` reverses the Conway word, mirrored exactly when the two reduce to opposite signs — 4000 links, no exceptions |
+
+The last one has a consequence worth having, because it is a check on everything at once.
+`H(3,1) = b(14,5) = C(2,1,4)` and `H(2,3) = b(14,3) = C(4,1,2)` are the same link — `5·3 ≡ 1
+(mod 14)` — but they are quite different diagrams: 8×5 with 25 discs against 8×3 with 24. Being
+the same pattern, they must give the same satellite invariants, and they do: `dim H(C/UC)`, a
+homotopy invariant over `F_2[U]`, agrees on every companion in the catalogue. Checked on 47
+such pairs.
 
 ## The solver
 

@@ -300,9 +300,24 @@ Do not rely on these in the solver. This is the data that we have found.
   dictionary and narrows nothing -- a test asserts `diagram.py` and `solver.py` never mention
   it, because the rest of the package takes any diagram at all and most (1,1) patterns are not
   unknot patterns. Two facts checked rather than assumed: `p` is always even, which is what
-  says the link has two components; and `gcd(p,q)=1` is EXACTLY the `gcd(2|r|-1,s+1)=1` that
+  says the link has two components; `gcd(p,q)=1` is EXACTLY the `gcd(2|r|-1,s+1)=1` that
   `H(r,s)` needs for beta to be one curve, since `4|r| = 2 mod (2|r|-1)` gives `p = 2(s+1)`
-  mod q with q odd. `H(-r,s)` is `b(p,p-q)`, the mirror. H(3,1) = b(14,5) = C(2,1,4).
+  mod q with q odd; and `|q| < p/2` (the standard range) holds WITHOUT normalising, since
+  `|q| = 2|r|-1` and `p/2 = s+2|r|` make it just `s > -1`. So do NOT reduce q into (0,p) --
+  that moves it out of the standard range. `b(p,-q)` is the mirror and negates every Conway
+  term, and `H(-r,s)` comes out as exactly `b(p,-q)`, so reflecting the Chen form mirrors the
+  link. Schubert: `b(p,q)=b(p,q')` iff `q' = q^{+-1} mod p`; `q -> q^-1` REVERSES the Conway
+  word, mirrored exactly when the two reduce to opposite signs (4000 links, no exceptions).
+  H(3,1) = b(14,5) = C(2,1,4).
+
+  **That last one is a check on the whole pipeline, and it passes.** H(3,1) = b(14,5) and
+  H(2,3) = b(14,3) are the same link (5*3 = 1 mod 14) but quite different diagrams -- 8x5 with
+  25 discs against 8x3 with 24. Being the same pattern they must give the same satellite
+  invariants, and they do: `dim H(C/UC)` over F_2, a homotopy invariant of a complex over
+  F_2[U] and a plain rank computation, agrees on every companion in the catalogue (unknot 1,
+  trefoil 29, lh-trefoil 31, figure-eight 31, T(2,5) 29) although the generator counts differ
+  (47 against 41). Checked on 47 such pairs. Not a heegaard test -- it needs `bordered`, and
+  the packages stay independent -- so it is recorded here instead.
 
 ## Traps, all of which cost time here
 

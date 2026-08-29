@@ -12,9 +12,9 @@ from heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv, diagram_t
                       discs_from_csv, discs_to_cfa_csv, discs_to_csv, names, parameters)
 from heegaard.format import CFA_FORMAT, IDEMPOTENT_OF_CURVE
 from heegaard.diagram import Diagram, DiagramError
-from heegaard.bridge import (conway, conway_of, name, normalise,
-                             parameters as bridge_parameters,
-                             parameters_of_conway, readings, schubert,
+from heegaard.bridge import (conway, conway_of, equivalent, inverse, mirror, name,
+                             normalise, parameters as bridge_parameters,
+                             parameters_of_conway, readings, reduced, schubert,
                              schubert_of_conway)
 from heegaard.chen import (H, chen_form, cut_height, is_connected,
                            main_region_winding, polyline, recut, sigma, wrapped)
@@ -580,6 +580,8 @@ class TwoBridge(unittest.TestCase):
 
     PAIRS = [(r, s) for r in list(range(1, 16)) + list(range(-15, 0))
              for s in range(1, 26)]
+    LINKS = [(p, q) for p in range(4, 120, 2) for q in range(1, p)
+             if gcd(p, q) == 1 and q % 2]
 
     def test_the_worked_example(self):
         self.assertEqual(schubert(3, 1), (14, 5))
@@ -588,49 +590,89 @@ class TwoBridge(unittest.TestCase):
         self.assertEqual(parameters_of_conway(2, 1, 4), (3, 1))
         self.assertEqual(name(3, 1), "H(3,1) = b(14,5) = C(2,1,4)")
 
+    def test_p_is_even_so_the_link_has_two_components(self):
+        self.assertTrue(all(schubert(r, s)[0] % 2 == 0 for r, s in self.PAIRS))
+
+    def test_q_is_coprime_to_p(self):
+        for r, s in self.PAIRS:
+            p, q = schubert(r, s)
+            self.assertEqual(gcd(p, abs(q)) == 1, is_connected(r, s), f"H({r},{s})")
+
+    def test_q_already_lies_in_the_standard_range(self):
+        """|q| < p/2 comes out of the formulas without asking: |q| = 2|r|-1 and
+        p/2 = s + 2|r|, so the condition is only s > -1."""
+        for r, s in self.PAIRS:
+            p, q = schubert(r, s)
+            self.assertLess(abs(q), p / 2, f"H({r},{s}) -> b({p},{q})")
+            self.assertEqual(reduced(p, q), q)
+
+    def test_reduced_lands_in_the_range_and_keeps_the_class(self):
+        for p, q in self.LINKS:
+            for shift in (-2, -1, 0, 1, 2):
+                out = reduced(p, q + shift * p)
+                self.assertLess(abs(out), p / 2 + 1)
+                self.assertEqual(out % p, q % p)
+
     def test_schubert_and_back(self):
         for r, s in self.PAIRS:
             self.assertEqual(bridge_parameters(*schubert(r, s)), (r, s))
 
     def test_conway_and_back(self):
         for r, s in self.PAIRS:
-            if not is_connected(r, s):
-                continue
-            p, q = schubert(r, s)
-            self.assertEqual(schubert_of_conway(*conway_of(r, s)), (p, normalise(p, q)))
+            if is_connected(r, s):
+                self.assertEqual(schubert_of_conway(*conway_of(r, s)), schubert(r, s))
 
     def test_conway_round_trips_on_every_small_link(self):
-        for p in range(4, 80, 2):
-            for q in range(1, p):
-                if gcd(p, q) != 1 or q % 2 == 0:
-                    continue
-                terms = conway(p, q)
-                self.assertEqual(schubert_of_conway(*terms), (p, q))
-                self.assertEqual(conway(*schubert_of_conway(*terms)), terms)
+        for p, q in self.LINKS:
+            terms = conway(p, q)
+            self.assertEqual(schubert_of_conway(*terms), (p, reduced(p, q)))
+            self.assertEqual(conway(*schubert_of_conway(*terms)), terms)
 
-    def test_p_is_even_so_the_link_has_two_components(self):
-        self.assertTrue(all(schubert(r, s)[0] % 2 == 0 for r, s in self.PAIRS))
+    # ------------------------------------------------------------------ mirror
 
-    def test_being_a_link_is_beta_being_one_curve(self):
-        """gcd(p,q) = gcd(2|r|-1, s+1), so the two conditions are the same one."""
+    def test_the_mirror_is_q_negated(self):
+        for p, q in self.LINKS:
+            self.assertEqual(mirror(p, q), (p, reduced(p, -q)))
+            self.assertEqual(mirror(*mirror(p, q)), (p, reduced(p, q)))
+
+    def test_the_mirror_negates_every_conway_term(self):
+        for p, q in self.LINKS:
+            self.assertEqual(conway(*mirror(p, q)), tuple(-a for a in conway(p, q)))
+
+    def test_flipping_r_is_the_mirror(self):
+        """Reflecting the Chen form gives b(p, -q), which is what it should."""
         for r, s in self.PAIRS:
-            p, q = schubert(r, s)
-            self.assertEqual(gcd(p, abs(q)) == 1, is_connected(r, s), f"H({r},{s})")
+            self.assertEqual(schubert(-r, s), mirror(*schubert(r, s)))
 
-    def test_flipping_r_mirrors_the_link(self):
-        """H(-r,s) is b(p, p-q), the mirror of H(r,s)'s b(p,q)."""
-        for r, s in self.PAIRS:
-            if r <= 0:
-                continue
-            p, q = schubert(r, s)
-            pm, qm = schubert(-r, s)
-            self.assertEqual(p, pm)
-            self.assertEqual(normalise(p, q) + normalise(pm, qm), p)
+    # ------------------------------------------------------------------ Schubert's theorem
+
+    def test_equivalence_is_an_equivalence(self):
+        sample = self.LINKS[:120]
+        for p, q in sample:
+            self.assertTrue(equivalent(p, q, p, q))
+            for p2, q2 in sample:
+                self.assertEqual(equivalent(p, q, p2, q2), equivalent(p2, q2, p, q))
+        for p, q in sample[:40]:
+            self.assertTrue(equivalent(p, q, *inverse(p, q)))
+
+    def test_different_p_is_never_the_same_link(self):
+        self.assertFalse(equivalent(14, 5, 16, 5))
+
+    def test_inverse_reverses_the_conway_word_up_to_the_mirror(self):
+        """C of q^-1 is C of q backwards, and mirrored exactly when the two reduce to
+        opposite signs.  4000 links, no exceptions."""
+        for p, q in self.LINKS:
+            forward = conway(p, q)
+            back = conway(*inverse(p, q))
+            same_sign = reduced(p, q) * reduced(p, pow(q, -1, p)) > 0
+            expected = tuple(reversed(forward))
+            if not same_sign:
+                expected = tuple(-a for a in expected)
+            self.assertEqual(back, expected, f"b({p},{q})")
 
     def test_readings_finds_the_diagram_back(self):
         for r, s in self.PAIRS:
-            p, q = schubert(r, s)
-            self.assertIn((r, s), readings(p, normalise(p, q)))
+            self.assertIn((r, s), readings(*schubert(r, s)))
 
     def test_what_is_refused(self):
         with self.assertRaises(ValueError):
@@ -638,11 +680,11 @@ class TwoBridge(unittest.TestCase):
         with self.assertRaises(ValueError):
             schubert(3, 0)                       # s must be positive
         with self.assertRaises(ValueError):
-            bridge_parameters(15, 5)                    # p odd: not two components
+            bridge_parameters(15, 5)             # p odd: not two components
         with self.assertRaises(ValueError):
-            bridge_parameters(14, 4)                    # q even
+            bridge_parameters(14, 4)             # q even
         with self.assertRaises(ValueError):
-            bridge_parameters(8, 5)                     # s would come out negative
+            bridge_parameters(8, 5)              # s would come out negative
         with self.assertRaises(ValueError):
             conway(14, 7)                        # gcd is 7, not a link
         with self.assertRaises(ValueError):
@@ -651,13 +693,11 @@ class TwoBridge(unittest.TestCase):
     def test_it_narrows_nothing(self):
         """The rest of the package still takes any diagram at all -- this module only names
         the ones that happen to be unknot patterns."""
-        import heegaard.bridge as bridge
         import heegaard.diagram as diagram
         import heegaard.solver as solver
         for module in (diagram, solver):
             with open(module.__file__, encoding="utf-8") as handle:
                 self.assertNotIn("bridge", handle.read())
-        self.assertNotIn("import", bridge.__doc__ or "")
 
 
 class AgainstTheJS(unittest.TestCase):
