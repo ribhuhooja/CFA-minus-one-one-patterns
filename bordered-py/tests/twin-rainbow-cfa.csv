@@ -1,0 +1,31 @@
+# bordered-cfa 1
+# name: twin-rainbow
+# iota0: y_0,y_1,y_2,y_3,y_4
+# iota1: x_0,x_1,x_2,x_3,x_4,x_5,x_6,x_7
+# count: 25
+source,target,U,chords
+x_0,x_3,1,
+x_1,x_2,1,
+x_5,x_4,0,P2P1
+x_6,x_3,1,P23P2P1
+x_6,x_5,1,
+x_6,y_3,0,P2
+x_7,x_4,1,P23
+x_7,x_4,2,
+x_7,y_4,0,P2
+y_0,x_0,1,P3P2P1
+y_0,x_4,1,P123
+y_0,x_7,0,P1
+y_0,y_3,1,
+y_0,y_4,0,P12
+y_1,x_1,1,P3P2P1
+y_1,x_3,1,P123P2P1
+y_1,x_6,0,P1
+y_1,y_2,1,
+y_1,y_3,0,P12
+y_2,x_2,1,P3P2P1
+y_2,x_4,0,P12P1
+y_2,x_5,0,P1
+y_3,x_3,1,P3P2P1
+y_3,x_4,1,P1
+y_4,x_4,1,P3

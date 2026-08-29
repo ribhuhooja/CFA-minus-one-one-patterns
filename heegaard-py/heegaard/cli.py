@@ -25,7 +25,8 @@ import sys
 import time
 
 from .diagram import DiagramError
-from .format import diagram_from_csv, diagram_to_csv, discs_from_csv, discs_to_csv
+from .format import (diagram_from_csv, diagram_to_csv, discs_from_csv, discs_to_cfa_csv,
+                     discs_to_csv)
 from .patterns import build, catalogue
 from .render import render_cover, render_diagram, render_discs
 from .qmn import Q
@@ -52,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     solve = sub.add_parser("solve", help="count the discs of a diagram")
     solve.add_argument("diagram", nargs="?", default=None, help="a diagram csv; stdin if absent")
     solve.add_argument("-o", "--out", default=None)
+    solve.add_argument("--format", default="discs", choices=["discs", "cfa"],
+                       help="the full disc table, or just the type-A structure it carries")
 
     draw = sub.add_parser("draw", help="svg of a diagram, its cover, and its discs")
     draw.add_argument("diagram", nargs="?", default=None, help="a diagram csv; stdin if absent")
@@ -95,7 +98,8 @@ def main(argv: list[str] | None = None) -> int:
         started = time.perf_counter()
         discs = enumerate_discs(diagram)
         seconds = time.perf_counter() - started
-        _emit(discs_to_csv(discs, diagram), args.out)
+        _emit(discs_to_csv(discs, diagram) if args.format == "discs"
+              else discs_to_cfa_csv(discs, diagram), args.out)
         print(f"{diagram} -> {len(discs)} discs ({seconds:.2f}s)", file=sys.stderr)
         return 0
     except (DiagramError, ValueError, OSError) as exc:

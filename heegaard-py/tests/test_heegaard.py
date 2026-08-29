@@ -8,7 +8,8 @@ import hashlib
 import unittest
 
 from heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv, diagram_to_csv,
-                      discs_from_csv, discs_to_csv, names, parameters)
+                      discs_from_csv, discs_to_cfa_csv, discs_to_csv, names, parameters)
+from heegaard.format import CFA_FORMAT, IDEMPOTENT_OF_CURVE
 from heegaard.diagram import Diagram, DiagramError
 from heegaard.chen import (H, chen_form, cut_height, is_connected,
                            main_region_winding, polyline, recut, sigma, wrapped)
@@ -600,3 +601,66 @@ class AgainstTheJS(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CfaExport(unittest.TestCase):
+    """``--format=cfa``: the disc table projected onto the type-A structure it carries.
+
+    This is the file the algebra reads, and the only thing that crosses between the two
+    packages.  Nothing here imports ``bordered``; what is checked is that the projection is
+    exactly the first four columns of the disc table and that the idempotent split is the one
+    the chords force.
+    """
+
+    #: which idempotent each Reeb chord runs between, from A(T^2).  Repeated here rather than
+    #: imported, so that a change on the algebra side has to be a deliberate change on both.
+    ENDS = {"P1": (0, 1), "P2": (1, 0), "P3": (0, 1),
+            "P12": (0, 0), "P23": (1, 1), "P123": (0, 1)}
+
+    def chords(self, word):
+        return ["P" + p for p in word.split("P") if p]
+
+    def test_it_is_the_first_four_columns_of_the_disc_table(self):
+        diagram = build("twin-rainbow")
+        discs = enumerate_discs(diagram)
+        full = [l for l in discs_to_csv(discs, diagram).splitlines() if not l.startswith("#")]
+        thin = [l for l in discs_to_cfa_csv(discs, diagram).splitlines()
+                if not l.startswith("#")]
+        self.assertEqual(thin, [",".join(l.split(",")[:4]) for l in full])
+
+    def test_the_header_declares_both_idempotents(self):
+        diagram = build("twin-rainbow")
+        text = discs_to_cfa_csv(enumerate_discs(diagram), diagram)
+        self.assertIn(f"# {CFA_FORMAT}", text)
+        self.assertIn("# iota0: y_0,y_1,y_2,y_3,y_4", text)
+        self.assertIn("# iota1: x_0,x_1,x_2,x_3,x_4,x_5,x_6,x_7", text)
+
+    def test_every_chord_word_composes_from_its_source_to_its_target(self):
+        """The check that forces y into iota_0 and x into iota_1, on every diagram here.
+
+        A word is a sequence, so what has to hold is that consecutive chords meet in the
+        idempotents -- not that they multiply to something nonzero.  (P2P1 occurs, and
+        rho_2 . rho_1 is zero.)
+        """
+        side = lambda name: IDEMPOTENT_OF_CURVE[name.partition("_")[0]]
+        for diagram in [build("twin-rainbow"), Q(1, 2, 2), Q(2, 2, 2), Q(1, 3, 2)]:
+            for disc in enumerate_discs(diagram):
+                word = self.chords(disc.word)
+                if not word:
+                    self.assertEqual(side(disc.source), side(disc.target), str(diagram))
+                    continue
+                self.assertEqual(side(disc.source), self.ENDS[word[0]][0], str(diagram))
+                self.assertEqual(side(disc.target), self.ENDS[word[-1]][1], str(diagram))
+                for a, b in zip(word, word[1:]):
+                    self.assertEqual(self.ENDS[a][1], self.ENDS[b][0], f"{disc.word}")
+
+    def test_the_other_idempotent_assignment_would_fail(self):
+        """Not a convention: swapping x and y breaks the very first chord."""
+        diagram = build("twin-rainbow")
+        swapped = {"y": 1, "x": 0}
+        bad = 0
+        for disc in enumerate_discs(diagram):
+            word = self.chords(disc.word)
+            if word and swapped[disc.source[0]] != self.ENDS[word[0]][0]:
+                bad += 1
+        self.assertGreater(bad, 0)

@@ -10,6 +10,7 @@ python3 -m heegaard generate 2 2 2 -o Q222.csv     # a Q(i,m,n) diagram
 python3 -m heegaard pattern                        # what else can be built
 python3 -m heegaard pattern twin-rainbow -o t.csv  # ... build one by name
 python3 -m heegaard solve Q222.csv -o discs.csv    # its discs
+python3 -m heegaard solve Q222.csv --format=cfa    # ... as a bordered-cfa CSV
 cat Q222.csv | python3 -m heegaard solve           # or as a filter
 python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
 python3 -m unittest discover -s tests
@@ -139,6 +140,19 @@ fall.
 **Q(1,2,1) = H(3,1)**; H has no `n >= 2` restriction, which is the only reason that was not
 obvious. `python3 report.py` writes `out/general-diagrams.html`, which runs every check and
 draws each stage.
+
+## Handing it to the algebra
+
+`--format=cfa` writes the same discs as a `bordered-cfa 1` file: the first four columns of the
+disc table — source, target, power of `U`, chord word — and nothing else. `arcs` and `path` are
+provenance, enough to rebuild each disc's polygon, and the algebra has no use for them.
+
+The header declares which idempotent of `A(T^2)` each generator sits in: **`y` generators are
+`iota_0` and `x` generators are `iota_1`**. That is forced rather than chosen. `rho_1` and
+`rho_3` run `iota_0 -> iota_1` and `rho_2` runs back, so a disc's chord word only composes from
+its source to its target under this assignment and not the other one — a test checks every
+disc of every diagram it builds, and `bordered` infers the same splitting from the chords
+without being told.
 
 ## The solver
 

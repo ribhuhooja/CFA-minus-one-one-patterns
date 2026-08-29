@@ -11,6 +11,11 @@ from .diagram import CURVE_OF_SIDE, Diagram, DiagramError, SIDES
 
 DIAGRAM_FORMAT = "heegaard-diagram 1"
 DISCS_FORMAT = "heegaard-discs 1"
+CFA_FORMAT = "bordered-cfa 1"
+#: which idempotent of A(T^2) a generator sits in.  Forced, not chosen: rho_1 and rho_3 run
+#: iota_0 -> iota_1 and rho_2 runs back, so a disc's chord word only composes from its source
+#: to its target under this assignment and not the other one.  Verified on every diagram tried.
+IDEMPOTENT_OF_CURVE = {"y": 0, "x": 1}
 
 
 def diagram_to_csv(diagram: Diagram, cell: int | None = None) -> str:
@@ -156,3 +161,33 @@ def _gen_key(name: str) -> tuple[str, int]:
     """Sort x_2 before x_10, matching the JS numeric collation."""
     curve, _, index = name.partition("_")
     return (curve, int(index))
+
+
+def discs_to_cfa_csv(discs, diagram: Diagram | None = None, sort: bool = True) -> str:
+    """The same discs as a ``bordered-cfa 1`` file: the type-A structure and nothing else.
+
+    A projection of ``discs_to_csv`` onto its first four columns.  ``arcs`` and ``path`` are
+    provenance -- which run of beta the disc was and how it closed up -- and the algebra has no
+    use for them, so this is the file to hand downstream.  Rows are NOT reduced mod 2 here; a
+    reader cancels repeats, and no disc table found so far has any.
+    """
+    names = sorted({d.source for d in discs} | {d.target for d in discs}, key=_gen_key)
+    if diagram is not None:
+        names = ([f"y_{j}" for j in range(diagram.y_count)]
+                 + [f"x_{j}" for j in range(diagram.x_count)])
+    sides: dict[int, list[str]] = {0: [], 1: []}
+    for name in names:
+        sides[IDEMPOTENT_OF_CURVE[name.partition("_")[0]]].append(name)
+
+    lines = [f"# {CFA_FORMAT}"]
+    if diagram is not None:
+        lines.append(f"# name: {diagram.name}")
+    lines += [f"# iota0: {','.join(sides[0])}", f"# iota1: {','.join(sides[1])}",
+              f"# count: {len(discs)}", "source,target,U,chords"]
+
+    def key(d):
+        return (_gen_key(d.source), _gen_key(d.target), d.U, d.word)
+
+    for d in (sorted(discs, key=key) if sort else discs):
+        lines.append(f"{d.source},{d.target},{d.U},{d.word}")
+    return "\n".join(lines) + "\n"
