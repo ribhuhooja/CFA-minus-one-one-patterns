@@ -8,6 +8,8 @@
     cat Q222.csv | python3 -m heegaard solve           # ... or from stdin
     python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
     python3 -m heegaard draw Q222.csv --discs=d.csv    # ... reusing a solved disc table
+    python3 -m heegaard bridge --hrs 3 1               # its names as a 2-bridge link
+    python3 -m heegaard bridge --conway 2 1 4          # ... or from either of the others
 
 `generate` is Q(i,m,n) and stays that way; `pattern` reaches the whole catalogue in
 `heegaard.patterns`, of which Q is one entry.
@@ -27,6 +29,7 @@ import time
 from .diagram import DiagramError
 from .format import (diagram_from_csv, diagram_to_csv, discs_from_csv, discs_to_cfa_csv,
                      discs_to_csv)
+from . import bridge as twobridge
 from .patterns import build, catalogue
 from .render import render_cover, render_diagram, render_discs
 from .qmn import Q
@@ -49,6 +52,12 @@ def main(argv: list[str] | None = None) -> int:
     pattern.add_argument("parameters", nargs="*", type=int,
                          help="its integer parameters, if it takes any")
     pattern.add_argument("-o", "--out", default=None)
+
+    names = sub.add_parser("bridge", help="name a pattern as a 2-bridge link")
+    which = names.add_mutually_exclusive_group(required=True)
+    which.add_argument("--hrs", nargs=2, type=int, metavar=("R", "S"))
+    which.add_argument("--schubert", nargs=2, type=int, metavar=("P", "Q"))
+    which.add_argument("--conway", nargs="+", type=int, metavar="A")
 
     solve = sub.add_parser("solve", help="count the discs of a diagram")
     solve.add_argument("diagram", nargs="?", default=None, help="a diagram csv; stdin if absent")
@@ -87,6 +96,16 @@ def main(argv: list[str] | None = None) -> int:
             diagram = build(args.name, *args.parameters)
             _emit(diagram_to_csv(diagram), args.out)
             print(f"{diagram}", file=sys.stderr)
+            return 0
+
+        if args.command == "bridge":
+            if args.hrs:
+                r, s = args.hrs
+            elif args.schubert:
+                r, s = twobridge.parameters(*args.schubert)
+            else:
+                r, s = twobridge.parameters_of_conway(*args.conway)
+            print(twobridge.name(r, s))
             return 0
 
         if args.command == "draw":

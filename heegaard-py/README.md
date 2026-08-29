@@ -154,6 +154,34 @@ its source to its target under this assignment and not the other one — a test 
 disc of every diagram it builds, and `bordered` infers the same splitting from the chords
 without being told.
 
+## 2-bridge names
+
+A (1,1) pattern whose companion is the unknot is a 2-component 2-bridge link, and those have
+two classical names: Schubert's `b(p, q)` and Conway's `C(a_1, ..., a_n)`. They are the same
+number written twice —
+
+    q/p = 1/(a_1 + 1/(a_2 + ...))     equivalently   p/q = [a_1; a_2, ..., a_n]
+
+— so the `a_i` are the continued fraction of `p/q`. `heegaard.bridge` joins them to ours at
+`p = 2s + 4|r|`, `q = sign(r)(2|r|-1)`:
+
+```bash
+python3 -m heegaard bridge --hrs 3 1        # H(3,1) = b(14,5) = C(2,1,4)
+python3 -m heegaard bridge --schubert 14 5  # the same, from either of the others
+python3 -m heegaard bridge --conway 2 1 4
+```
+
+It is **only a dictionary** — it narrows nothing. The solver, the visualiser and the algebra
+take whatever diagram they are handed, and plenty of (1,1) patterns are not unknot patterns;
+this is here so that one which *is* can be called by its usual name. A test asserts that
+neither `diagram` nor `solver` so much as mentions it.
+
+Two things fall out and are checked rather than assumed. `p` is always even, which is what says
+the link has two components rather than one. And `b(p,q)` is a link at all only when
+`gcd(p,q) = 1` — which turns out to be *exactly* the `gcd(2|r|-1, s+1) = 1` that `H(r,s)` needs
+for beta to be a single curve, because `4|r| ≡ 2 (mod 2|r|-1)` makes `p ≡ 2(s+1)` and `q` is
+odd. Also `H(-r,s)` comes out as `b(p, p-q)`, the mirror.
+
 ## The solver
 
 `enumerate_discs(diagram)` returns every disc: source, target, Reeb chords, power of U, and

@@ -6,11 +6,16 @@ is a cross-check between two implementations rather than a restatement of one.
 
 import hashlib
 import unittest
+from math import gcd
 
 from heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv, diagram_to_csv,
                       discs_from_csv, discs_to_cfa_csv, discs_to_csv, names, parameters)
 from heegaard.format import CFA_FORMAT, IDEMPOTENT_OF_CURVE
 from heegaard.diagram import Diagram, DiagramError
+from heegaard.bridge import (conway, conway_of, name, normalise,
+                             parameters as bridge_parameters,
+                             parameters_of_conway, readings, schubert,
+                             schubert_of_conway)
 from heegaard.chen import (H, chen_form, cut_height, is_connected,
                            main_region_winding, polyline, recut, sigma, wrapped)
 from heegaard.layout import (crossings_between, nesting, route, route_radial,
@@ -568,6 +573,91 @@ class QIsH(unittest.TestCase):
         self.assertEqual(arc_set(tw), arc_set(h))
         self.assertEqual(discs_to_csv(enumerate_discs(h), h).splitlines()[6:],
                          discs_to_csv(enumerate_discs(tw), tw).splitlines()[6:])
+
+
+class TwoBridge(unittest.TestCase):
+    """b(p, q), C(a_1, ..., a_n) and H(r, s) are three names for one pattern."""
+
+    PAIRS = [(r, s) for r in list(range(1, 16)) + list(range(-15, 0))
+             for s in range(1, 26)]
+
+    def test_the_worked_example(self):
+        self.assertEqual(schubert(3, 1), (14, 5))
+        self.assertEqual(conway(14, 5), (2, 1, 4))
+        self.assertEqual(schubert_of_conway(2, 1, 4), (14, 5))
+        self.assertEqual(parameters_of_conway(2, 1, 4), (3, 1))
+        self.assertEqual(name(3, 1), "H(3,1) = b(14,5) = C(2,1,4)")
+
+    def test_schubert_and_back(self):
+        for r, s in self.PAIRS:
+            self.assertEqual(bridge_parameters(*schubert(r, s)), (r, s))
+
+    def test_conway_and_back(self):
+        for r, s in self.PAIRS:
+            if not is_connected(r, s):
+                continue
+            p, q = schubert(r, s)
+            self.assertEqual(schubert_of_conway(*conway_of(r, s)), (p, normalise(p, q)))
+
+    def test_conway_round_trips_on_every_small_link(self):
+        for p in range(4, 80, 2):
+            for q in range(1, p):
+                if gcd(p, q) != 1 or q % 2 == 0:
+                    continue
+                terms = conway(p, q)
+                self.assertEqual(schubert_of_conway(*terms), (p, q))
+                self.assertEqual(conway(*schubert_of_conway(*terms)), terms)
+
+    def test_p_is_even_so_the_link_has_two_components(self):
+        self.assertTrue(all(schubert(r, s)[0] % 2 == 0 for r, s in self.PAIRS))
+
+    def test_being_a_link_is_beta_being_one_curve(self):
+        """gcd(p,q) = gcd(2|r|-1, s+1), so the two conditions are the same one."""
+        for r, s in self.PAIRS:
+            p, q = schubert(r, s)
+            self.assertEqual(gcd(p, abs(q)) == 1, is_connected(r, s), f"H({r},{s})")
+
+    def test_flipping_r_mirrors_the_link(self):
+        """H(-r,s) is b(p, p-q), the mirror of H(r,s)'s b(p,q)."""
+        for r, s in self.PAIRS:
+            if r <= 0:
+                continue
+            p, q = schubert(r, s)
+            pm, qm = schubert(-r, s)
+            self.assertEqual(p, pm)
+            self.assertEqual(normalise(p, q) + normalise(pm, qm), p)
+
+    def test_readings_finds_the_diagram_back(self):
+        for r, s in self.PAIRS:
+            p, q = schubert(r, s)
+            self.assertIn((r, s), readings(p, normalise(p, q)))
+
+    def test_what_is_refused(self):
+        with self.assertRaises(ValueError):
+            schubert(0, 3)                       # r must not be zero
+        with self.assertRaises(ValueError):
+            schubert(3, 0)                       # s must be positive
+        with self.assertRaises(ValueError):
+            bridge_parameters(15, 5)                    # p odd: not two components
+        with self.assertRaises(ValueError):
+            bridge_parameters(14, 4)                    # q even
+        with self.assertRaises(ValueError):
+            bridge_parameters(8, 5)                     # s would come out negative
+        with self.assertRaises(ValueError):
+            conway(14, 7)                        # gcd is 7, not a link
+        with self.assertRaises(ValueError):
+            schubert_of_conway()                 # nothing to expand
+
+    def test_it_narrows_nothing(self):
+        """The rest of the package still takes any diagram at all -- this module only names
+        the ones that happen to be unknot patterns."""
+        import heegaard.bridge as bridge
+        import heegaard.diagram as diagram
+        import heegaard.solver as solver
+        for module in (diagram, solver):
+            with open(module.__file__, encoding="utf-8") as handle:
+                self.assertNotIn("bridge", handle.read())
+        self.assertNotIn("import", bridge.__doc__ or "")
 
 
 class AgainstTheJS(unittest.TestCase):

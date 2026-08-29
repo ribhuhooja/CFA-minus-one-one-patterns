@@ -293,6 +293,17 @@ Do not rely on these in the solver. This is the data that we have found.
   homology of rank one every time -- `Q(1,2,1)` applied to the unknot has `gCFK^-` of rank 1
   with `y_4 = U y_3 = U^2 y_2`.
 
+- **2-bridge names** -- `heegaard-py/heegaard/bridge.py`. A (1,1) unknot pattern is a
+  2-component 2-bridge link, so it has Schubert's `b(p,q)` and Conway's `C(a_1,...,a_n)` as
+  well; the `a_i` are the continued fraction of `p/q`, and ours join at `p = 2s+4|r|`,
+  `q = sign(r)(2|r|-1)`. `python3 -m heegaard bridge --hrs 3 1` prints all three. It is ONLY a
+  dictionary and narrows nothing -- a test asserts `diagram.py` and `solver.py` never mention
+  it, because the rest of the package takes any diagram at all and most (1,1) patterns are not
+  unknot patterns. Two facts checked rather than assumed: `p` is always even, which is what
+  says the link has two components; and `gcd(p,q)=1` is EXACTLY the `gcd(2|r|-1,s+1)=1` that
+  `H(r,s)` needs for beta to be one curve, since `4|r| = 2 mod (2|r|-1)` gives `p = 2(s+1)`
+  mod q with q odd. `H(-r,s)` is `b(p,p-q)`, the mirror. H(3,1) = b(14,5) = C(2,1,4).
+
 ## Traps, all of which cost time here
 
 - **Extrapolating the cost exponent from small diagrams runs low.** `T ~ k*C^e` with `e = 2.27`
