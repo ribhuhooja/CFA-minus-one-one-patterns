@@ -187,9 +187,20 @@ has the discs.
    assume straight arcs: it routes as straight chords in a disc (which cannot cross when the
    chord diagram does not interleave) and carries them back to the square, so it works on any
    valid diagram.
-3. **Any `H(r,s)`, not just `Q(i,m,n)`.** Everything below `Q()` is already general; what is
-   missing is a constructor and a check that the straight-segment drawing rule still gives an
-   embedded picture off the Q family (`findArcCrossings` will report rather than draw wrong).
+3. ~~**Any `H(r,s)`, not just `Q(i,m,n)`.**~~ — **DONE in python**, `heegaard-py/heegaard/chen.py`.
+   Built in Chen form on the annulus (cut along `mu` only, so beta has no generators on the
+   other curve yet), then the region is slid until `z` is at a corner, which cuts beta in
+   `2|r|-1` new places -- those are the new generators -- and a quarter turn puts `z` top left.
+   Dependent arcs number `|sigma|` when `sigma < 0` and `sigma + 2` when not; the positive case
+   is Fig 15(b), needing a small rainbow at each end because a strand cannot be reversed.
+   `sigma` closed form == walking the main region, checked on 200 pairs.
+   **Q(i,m,n) IS H(1+2im-m, n+3m-2mn+4imn-4im-2)** -- 36/36 arc for arc, disc tables identical.
+   **`twin-rainbow` is Q(1,2,1) = H(3,1)**; the earlier note here that it was outside the Q
+   family was wrong, and wrong only because `qmn.py` refuses `n < 2`. H has no such limit and
+   handles `r < 0` (the picture upside down, Fig 16). The re-cut uses real geometry on purpose:
+   the crossing COUNT can be read off, but their ORDER along the cut cannot, and the order is
+   what fixes the diagram. `python3 report.py` writes `out/general-diagrams.html` with every
+   stage drawn. Still to do: the JS side has none of this.
 4. The x-snail, to close the family table.
 5. Assembling discs into the algebra. Nothing has been done here.
 

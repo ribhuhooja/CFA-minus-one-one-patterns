@@ -67,7 +67,8 @@ d = build("qimn", 2, 2, 2)
 | | |
 |---|---|
 | `qimn <i> <m> <n>` | the Q(i,m,n) family |
-| `twin-rainbow` | 8 x and 5 y generators, two nested rainbows; hand-drawn, **outside** the Q family |
+| `hrs <r> <s>` | the general family H(r,s), of which Q(i,m,n) is one member |
+| `twin-rainbow` | 8 x and 5 y generators, two nested rainbows; hand-drawn. It is **Q(1,2,1)** |
 
 To add one: write a builder that ends in `.validate()` and sets the `w` basepoint, then put a
 `Pattern` for it in `PATTERNS`. Nothing else in the package has to change — the tests walk the
@@ -108,6 +109,36 @@ its path — that is all the geometry there ever was. So a disc list computed by
 draws here without solving anything again, and the picture is byte-identical to the one drawn
 from Python's own solver. Disc order does not affect the picture either: the discs are put
 into canonical order before packing.
+
+## H(r, s), the general family
+
+`heegaard.chen` builds the general (1,1) diagram from two integers, `r != 0` and `s > 0`, with
+beta a single closed curve exactly when `gcd(2|r|-1, s+1) = 1`. It is built in **Chen form** —
+on the torus cut along the up-down curve `mu` only, so an annulus, where every arc runs between
+the two boundary circles or turns back to the one it came from and nothing crosses the
+left-right curve at all. Then the fundamental region is slid until `z` sits at a corner, which
+cuts beta in `2|r|-1` new places; those are the new generators. A quarter turn puts `z` in the
+top left corner and exchanges the two curves.
+
+The number of dependent arcs is `|sigma(r,s)|` when `sigma < 0` and `sigma + 2` when it is not,
+where `sigma` is the winding the main region picks up:
+
+    sigma(r, s) = 1 - sum_{j=1}^{2r+s-1} (-1)^floor(j(2r-1)/(2r+s))
+
+The positive case is the one that needs a small rainbow at each end to turn the curve about,
+because a strand cannot simply be reversed. A test checks the closed form against walking the
+main region and counting, on 200 pairs.
+
+The re-cut is done with **real geometry**, not by counting. How many crossings there are can be
+read off; the order they come in along the cut cannot, and that is what fixes the diagram. So
+the annulus is drawn, the cut is a line across it, and the crossings are sorted by where they
+fall.
+
+**Q(i,m,n) is H(1+2im-m, n+3m-2mn+4imn-4im-2)** — checked arc for arc on all 36 diagrams with
+`i` up to 4 and `m, n` in 2..4, and disc table for disc table on a sample. `twin-rainbow` is
+**Q(1,2,1) = H(3,1)**; H has no `n >= 2` restriction, which is the only reason that was not
+obvious. `python3 report.py` writes `out/general-diagrams.html`, which runs every check and
+draws each stage.
 
 ## The solver
 

@@ -10,6 +10,8 @@ import unittest
 from heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv, diagram_to_csv,
                       discs_from_csv, discs_to_csv, names, parameters)
 from heegaard.diagram import Diagram, DiagramError
+from heegaard.chen import (H, chen_form, cut_height, is_connected,
+                           main_region_winding, polyline, recut, sigma, wrapped)
 from heegaard.layout import (crossings_between, nesting, route, route_radial,
                              stroked, strokes)
 from heegaard.render import render_cover, render_diagram, render_discs
@@ -286,13 +288,17 @@ class TwinRainbow(unittest.TestCase):
     def test_disc_count_matches_the_js_solver(self):
         self.assertEqual(len(enumerate_discs(self.diagram)), 25)
 
-    def test_it_is_outside_the_q_family(self):
-        """No Q(i,m,n) has 8 x and 5 y generators; maxy = 4 forces m=2, i=1, then n < 2."""
+    def test_it_is_Q_1_2_1(self):
+        """It is Q(1,2,1) -- see QIsH.  What is true is only that no Q with n >= 2 fits it,
+        which is all the constructor in qmn.py can make: maxy = 4 forces m=2, i=1, and then
+        maxx = 6n+1 = 7 wants n = 1."""
         for i in range(1, 8):
             for m in range(1, 8):
                 for n in range(2, 8):
                     p = parameters(i, m, n)
                     self.assertNotEqual((p.max_x, p.max_y), (7, 4), f"Q({i},{m},{n})")
+        self.assertEqual(parameters(1, 2, 1).max_x, 7)
+        self.assertEqual(parameters(1, 2, 1).max_y, 4)
 
     def test_round_trips_through_csv(self):
         original = self.diagram
@@ -437,6 +443,122 @@ class Render(unittest.TestCase):
         without = render_discs(self.diagram, self.discs, labels=False)
         self.assertIn("U^", with_labels)
         self.assertLess(without.count("<text"), with_labels.count("<text"))
+
+
+def q_parameters(i, m, n):
+    """The (r, s) that Q(i,m,n) is claimed to be H of."""
+    return 1 + 2*i*m - m, n + 3*m - 2*m*n + 4*i*m*n - 4*i*m - 2
+
+
+def arc_set(d):
+    return sorted(tuple(sorted(((a.a.side, a.a.index), (a.b.side, a.b.index)))) for a in d.arcs)
+
+
+class ChenForm(unittest.TestCase):
+    """H(r, s) built on the annulus, before it is cut across."""
+
+    CASES = [(r, s) for r in list(range(2, 9)) + list(range(-8, -1))
+             for s in range(1, 12) if is_connected(r, s)]
+
+    def test_the_sigma_formula_is_the_winding_of_the_main_region(self):
+        """The closed form and walking the path have to agree, and nothing else says so."""
+        for r in range(2, 12):
+            for s in range(1, 21):
+                with self.subTest(r=r, s=s):
+                    self.assertEqual(sigma(r, s), -main_region_winding(r, s))
+
+    def test_every_point_is_used_once_on_each_side(self):
+        for r, s in self.CASES:
+            form = chen_form(r, s)
+            for side in ("left", "right"):
+                used = sorted(i for sa, ia, sb, ib, _f, _ha, _hb in form.arcs
+                              for s_, i in ((sa, ia), (sb, ib)) if s_ == side)
+                self.assertEqual(used, list(range(form.M)), f"H({r},{s}) {side}")
+
+    def test_the_arcs_stay_inside_the_domain_once_wrapped(self):
+        for r, s in self.CASES[:40]:
+            form = chen_form(r, s)
+            for arc in form.arcs:
+                for piece in wrapped(polyline(form, arc, 12), form.M):
+                    for _x, h in piece:
+                        self.assertGreaterEqual(h, -1e-9)
+                        self.assertLessEqual(h, form.M + 1e-9)
+
+    def test_the_drawing_is_embedded(self):
+        """If two arcs crossed, the order of the crossings along the new cut would be wrong,
+        and the diagram that came out would not be embedded either."""
+        for r, s in self.CASES[:30]:
+            paths = []
+            form = chen_form(r, s)
+            for arc in form.arcs:
+                paths.extend(wrapped(polyline(form, arc, 24), form.M))
+            scaled = [[(x, h / form.M) for x, h in piece] for piece in paths]
+            self.assertEqual(crossings_between(scaled), [], f"H({r},{s})")
+
+    def test_the_cut_meets_beta_twice_r_minus_one_times(self):
+        for r, s in self.CASES:
+            _, hits = recut(chen_form(r, s))
+            self.assertEqual(len(hits), 2 * abs(r) - 1, f"H({r},{s})")
+
+    def test_H_is_a_legal_diagram(self):
+        for r, s in self.CASES:
+            with self.subTest(r=r, s=s):
+                d = H(r, s)
+                self.assertEqual(d.problems(), [])
+                self.assertEqual((d.x_count, d.y_count),
+                                 (chen_form(r, s).M, 2 * abs(r) - 1))
+
+    def test_a_disconnected_beta_is_refused(self):
+        bad = next((r, s) for r in range(2, 12) for s in range(1, 12)
+                   if not is_connected(r, s))
+        with self.assertRaises(ValueError):
+            H(*bad)
+
+    def test_H_round_trips_through_csv(self):
+        for r, s in [(3, 1), (3, 6), (5, 4), (-3, 6), (7, 14)]:
+            original = H(r, s)
+            back = diagram_from_csv(diagram_to_csv(original))
+            self.assertEqual(arc_set(original), arc_set(back))
+            self.assertEqual(discs_to_csv(enumerate_discs(back), back).splitlines()[6:],
+                             discs_to_csv(enumerate_discs(original), original).splitlines()[6:])
+
+
+class QIsH(unittest.TestCase):
+    """Q(i,m,n) is H(1+2im-m, n+3m-2mn+4imn-4im-2)."""
+
+    def test_the_arcs_are_the_same(self):
+        for i in range(1, 5):
+            for m in range(2, 5):
+                for n in range(2, 5):
+                    r, s = q_parameters(i, m, n)
+                    with self.subTest(i=i, m=m, n=n, r=r, s=s):
+                        self.assertEqual(arc_set(H(r, s)), arc_set(Q(i, m, n)))
+
+    def test_the_discs_are_the_same(self):
+        for i, m, n in [(1, 2, 2), (2, 2, 2), (1, 3, 2), (2, 3, 3), (1, 4, 4)]:
+            r, s = q_parameters(i, m, n)
+            q, h = Q(i, m, n), H(r, s)
+            with self.subTest(i=i, m=m, n=n):
+                self.assertEqual(discs_to_csv(enumerate_discs(h), h).splitlines()[6:],
+                                 discs_to_csv(enumerate_discs(q), q).splitlines()[6:])
+
+    def test_the_dependent_count_is_m_plus_n_minus_two(self):
+        for i in range(1, 5):
+            for m in range(1, 5):
+                for n in range(1, 5):
+                    r, s = q_parameters(i, m, n)
+                    if r < 1 or s < 1:
+                        continue
+                    with self.subTest(i=i, m=m, n=n):
+                        self.assertEqual(abs(sigma(r, s)), m + n - 2)
+
+    def test_twin_rainbow_is_Q_1_2_1(self):
+        """The hand-drawn diagram is Q(1,2,1), which is H(3,1)."""
+        self.assertEqual(q_parameters(1, 2, 1), (3, 1))
+        tw, h = build("twin-rainbow"), H(3, 1)
+        self.assertEqual(arc_set(tw), arc_set(h))
+        self.assertEqual(discs_to_csv(enumerate_discs(h), h).splitlines()[6:],
+                         discs_to_csv(enumerate_discs(tw), tw).splitlines()[6:])
 
 
 class AgainstTheJS(unittest.TestCase):

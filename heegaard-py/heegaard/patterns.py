@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from .chen import H
 from .diagram import Diagram
 from .qmn import Q
 
@@ -28,6 +29,18 @@ from .qmn import Q
 def qimn(i: int, m: int, n: int) -> Diagram:
     """The Q(i, m, n) family.  See :mod:`heegaard.qmn`, which is where it is built."""
     return Q(i, m, n)
+
+
+# --------------------------------------------------------------------------- H(r, s)
+
+def hrs(r: int, s: int) -> Diagram:
+    """The general family H(r, s).  See :mod:`heegaard.chen`, which is where it is built.
+
+    Q(i,m,n) is the member with ``r = 1+2im-m`` and ``s = n+3m-2mn+4imn-4im-2``, which the
+    tests check arc for arc; ``twin-rainbow`` is Q(1,2,1) = H(3,1).  Unlike Q this one is
+    happy with ``n = 1``, and with ``r < 0``.
+    """
+    return H(r, s)
 
 
 # --------------------------------------------------------------------------- twin rainbow
@@ -50,17 +63,19 @@ def twin_rainbow() -> Diagram:
     confirmed against heegaard-js: the same CSV through ``node solve.js`` comes back
     byte for byte.
 
-    This is **not** a member of the Q family, and not for want of trying to fit it.  The right
-    fan gives r = 3 (three top-right arcs, two bottom-right), while the two nested rainbows
-    give r = 2; those cannot both hold.  Going the other way, maxy = 4im - 2m = 4 forces
-    m = 2, i = 1, and then maxx = 6n + 1 = 7 wants n = 1, below the n >= 2 the family needs.
+    It **is** a member of the Q family: it is Q(1,2,1), which is H(3,1).  That was missed at
+    first because the Q constructor here only admits n >= 2, and with that restriction the
+    fit really is impossible -- the right fan gives r = 3 while the two rainbows give r = 2,
+    and going the other way maxy = 4im - 2m = 4 forces m = 2, i = 1, and then maxx = 6n+1 = 7
+    wants n = 1.  Which is the answer, not a contradiction: n = 1.  :mod:`heegaard.chen`
+    builds H(r,s) for any legal r and s and has no such restriction, and a test holds this
+    diagram and H(3,1) together arc for arc and disc for disc.
 
-    Nor does the obvious one-parameter generalisation exist.  Reading the picture as p nested
-    rainbows with a matching (p+1)-arc right fan reproduces this diagram at p = 2 and gives a
-    legal *slot* pattern at every p, but beta then meets (alpha_y, alpha_x) with multiplicity
-    (-1, 1) at p = 1 and (-1, 2-p) from p = 3 up -- a closed curve in the wrong homology class
-    every time.  Only p = 2 lands on (-1, 0).  Checked p = 1 .. 6; do not spend the afternoon
-    on it again.
+    Nor does the obvious one-parameter generalisation of the *picture* exist.  Reading it as
+    p nested rainbows with a matching (p+1)-arc right fan reproduces this diagram at p = 2 and
+    gives a legal slot pattern at every p, but beta then meets (alpha_y, alpha_x) with
+    multiplicity (-1, 1) at p = 1 and (-1, 2-p) from p = 3 up -- a closed curve in the wrong
+    homology class every time.  Checked p = 1 .. 6.
     """
     d = Diagram(name="twin-rainbow", x_count=8, y_count=5)
 
@@ -108,8 +123,10 @@ PATTERNS: dict[str, Pattern] = {
     p.name: p for p in (
         Pattern("qimn", ("i", "m", "n"),
                 "the Q(i,m,n) family: rainbows, dependent strands, and a right fan", qimn),
+        Pattern("hrs", ("r", "s"),
+                "the general family H(r,s); Q(i,m,n) is one member of it", hrs),
         Pattern("twin-rainbow", (),
-                "8 x and 5 y generators, two nested rainbows; drawn by hand, outside Q",
+                "8 x and 5 y generators, two nested rainbows; drawn by hand.  It is Q(1,2,1)",
                 twin_rainbow),
     )
 }

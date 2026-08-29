@@ -467,3 +467,112 @@ def render_discs(diagram: Diagram, discs, cell: float = 74, limit: int | None = 
                  f'font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" '
                  f'fill="{COLOURS["ink"]}">{_esc(text)}</text>')
     return _svg(W, H, "\n  ".join(parts), f"{diagram.name} discs")
+
+
+# ------------------------------------------------------------------ the Chen form
+
+#: the families of a Chen form, and the colour each is drawn in
+CHEN_COLOURS = {"rainbow-z": "#c1666b", "rainbow-w": "#2a9d8f", "strand": "#5f6caf",
+                "dependent": "#b5651d", "dependent-turn": "#9d4edd"}
+
+
+def render_chen(form, cut: bool = False, cell: float = 520,
+                caption: str | None = None) -> str:
+    """The Chen form: the torus cut along ``mu`` only, so an annulus.
+
+    The two red edges are the same curve ``mu``, glued; the dashed edges are where the domain
+    happens to be cut across, and beta does not touch them -- which is the whole point of this
+    picture, and why it has no generators on that curve yet.
+
+    With ``cut``, the line the fundamental region is about to be slid to is drawn across it,
+    through ``z``, together with every place it meets beta.  Those meetings are the new
+    generators, and they are numbered along the line, left to right, because that is the order
+    they will appear in.
+    """
+    from .chen import basepoints, cut_height, polyline, recut, wrapped
+
+    M = form.M
+    pad = max(34.0, cell * 0.09)
+    bottom = pad + 34
+    W, H = cell + 2 * pad, cell + pad + bottom
+
+    def to(x, h):
+        return (pad + x * cell, pad + (h / M) * cell)
+
+    parts = [f'<rect width="{_fmt(W)}" height="{_fmt(H)}" fill="{COLOURS["paper"]}"/>']
+    # the two glued copies of mu, and the cut the domain currently has
+    for x in (0.0, 1.0):
+        a, b = to(x, 0), to(x, M)
+        parts.append(f'<line x1="{_fmt(a[0])}" y1="{_fmt(a[1])}" x2="{_fmt(b[0])}" '
+                     f'y2="{_fmt(b[1])}" stroke="{COLOURS["grid"]}" stroke-width="2.5"/>')
+    for h in (0, M):
+        a, b = to(0, h), to(1, h)
+        parts.append(f'<line x1="{_fmt(a[0])}" y1="{_fmt(a[1])}" x2="{_fmt(b[0])}" '
+                     f'y2="{_fmt(b[1])}" stroke="#c9c4bd" stroke-width="1.6" '
+                     f'stroke-dasharray="6 5"/>')
+
+    for arc in form.arcs:
+        hue = CHEN_COLOURS.get(arc[4], COLOURS["arc"])
+        for piece in wrapped(polyline(form, arc, 60), M):
+            d = _path_d([to(x, h) for x, h in piece])
+            parts.append(f'<path d="{d}" fill="none" stroke="{hue}" stroke-width="2" '
+                         f'stroke-linecap="round"/>')
+
+    parts.append(f'<g fill="{COLOURS["generator"]}">')
+    for slot in range(M):
+        for x in (0.0, 1.0):
+            cx, cy = to(x, slot)
+            parts.append(f'<circle cx="{_fmt(cx)}" cy="{_fmt(cy)}" r="2.6"/>')
+    parts.append("</g>")
+
+    if M <= 34:
+        size = min(11.0, max(6.5, cell / M * 0.6))
+        parts.append(f'<g font-family="ui-monospace,Menlo,monospace" font-size="{_fmt(size)}" '
+                     f'fill="{COLOURS["label"]}">')
+        for slot in range(M):
+            x, y = to(0.0, slot)
+            parts.append(f'<text x="{_fmt(x - 7)}" y="{_fmt(y + size * 0.36)}" '
+                         f'text-anchor="end">{slot}</text>')
+            x, y = to(1.0, slot)
+            parts.append(f'<text x="{_fmt(x + 7)}" y="{_fmt(y + size * 0.36)}" '
+                         f'text-anchor="start">{slot}</text>')
+        parts.append("</g>")
+
+    if cut:
+        c = cut_height(form)
+        a, b = to(-0.03, c), to(1.03, c)
+        parts.append(f'<line x1="{_fmt(a[0])}" y1="{_fmt(a[1])}" x2="{_fmt(b[0])}" '
+                     f'y2="{_fmt(b[1])}" stroke="{COLOURS["basepoint"]}" stroke-width="2" '
+                     f'stroke-dasharray="7 4"/>')
+        _, hits = recut(form)
+        parts.append(f'<g font-family="ui-monospace,Menlo,monospace" font-size="10" '
+                     f'fill="{COLOURS["basepoint"]}">')
+        for hit in hits:
+            x, y = to(hit["x"], c)
+            parts.append(f'<circle cx="{_fmt(x)}" cy="{_fmt(y)}" r="4" '
+                         f'fill="{COLOURS["basepoint"]}"/>')
+            parts.append(f'<text x="{_fmt(x)}" y="{_fmt(y - 8)}" '
+                         f'text-anchor="middle">{hit["index"]}</text>')
+        parts.append("</g>")
+
+    parts.append(f'<g fill="{COLOURS["basepoint"]}" '
+                 f'font-family="ui-monospace,Menlo,monospace" font-size="12">')
+    for name, (x, h) in basepoints(form).items():
+        cx, cy = to(x, h)
+        parts.append(f'<circle cx="{_fmt(cx)}" cy="{_fmt(cy)}" r="3.6"/>'
+                     f'<text x="{_fmt(cx - 12)}" y="{_fmt(cy + 4)}" '
+                     f'text-anchor="end">{name}</text>')
+    parts.append("</g>")
+
+    text = caption if caption is not None else (
+        f"H({form.r},{form.s}) Chen form  ·  {form.M} points on mu  ·  "
+        f"D = {form.D} dependent arcs  ·  sigma = {_chen_sigma(form)}")
+    parts.append(f'<text x="{_fmt(pad)}" y="{_fmt(H - 14)}" '
+                 f'font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" '
+                 f'fill="{COLOURS["ink"]}">{_esc(text)}</text>')
+    return _svg(W, H, "\n  ".join(parts), f"H({form.r},{form.s}) Chen form")
+
+
+def _chen_sigma(form) -> int:
+    from .chen import sigma
+    return sigma(form.r, form.s)
