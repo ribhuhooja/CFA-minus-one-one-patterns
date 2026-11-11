@@ -23,7 +23,8 @@ the picture.  Neither goes away with more samples.
 
 The domain is the unit square, so a copy of it is a unit cell of the grid the solver works on.
 Generator k of a count of N sits at (k + 1/2)/N along its edge, which leaves the same half-gap
-at both ends and so spaces evenly across the gluing seam.
+at both ends and so spaces evenly across the gluing seam -- or at the same fraction of a
+narrower stretch of it, when :func:`tune_spacing` has found that draws better.
 """
 
 from __future__ import annotations
@@ -35,10 +36,28 @@ from dataclasses import dataclass
 from .diagram import CURVE_OF_SIDE, Diagram, Endpoint
 
 
+UNIFORM = {"x": (0.0, 1.0), "y": (0.0, 1.0), "bow": 0.0}
+
+
+def spacing(diagram: Diagram) -> dict:
+    """The stretch of each alpha curve its generators are spread over, evenly, and how much
+    the strands across the domain bow.
+
+    ``(0, 1)`` -- the whole edge -- and straight strands, unless :func:`tune_spacing` has
+    found something that draws better.  The stretch is measured from the corner where z
+    sits, top left: along the top from the left, down the left side from the top.
+    """
+    return getattr(diagram, "_spacing", None) or UNIFORM
+
+
 def position(diagram: Diagram, end: Endpoint) -> tuple[float, float]:
-    """Where a generator sits on the boundary of the unit square, y upward."""
+    """Where a generator sits on the boundary of the unit square, y upward.
+
+    Moving them is free: it is an isotopy of the whole diagram, so it changes no disc.  It is
+    only ever done to draw better -- see :func:`tune_spacing`."""
     count = diagram.x_count if end.curve == "x" else diagram.y_count
-    along = (end.index + 0.5) / count
+    lo, hi = spacing(diagram)[end.curve]
+    along = lo + (hi - lo) * (end.index + 0.5) / count
     if end.side == "bottom":
         return (along, 0.0)
     if end.side == "top":
@@ -81,6 +100,9 @@ CORNER = {frozenset(("bottom", "left")): (0.0, 0.0),
 #: how sharply an arc's wanted shape gives way to the room it actually has; smaller is
 #: gentler, and 1 would be the harmonic mean, which gives way far too early
 SOFTNESS = 2.0
+#: how far along its inward normals a strand across the domain reaches, when it bows at all
+#: -- see strokes() and tune_spacing()
+STRAND_BOW = 0.3
 #: rainbows barely give at all -- see strokes()
 SOFTNESS_RAINBOW = 8.0
 #: the direction into the domain from each edge
@@ -199,7 +221,15 @@ def strokes(diagram: Diagram) -> list:
     on the right being one point of the torus.  Both shapes leave their generators square-on,
     and that is what lets the halves meet as one smooth rainbow in the universal cover.
 
-    **Two opposite edges** has a whole side behind it and is drawn straight.
+    **Two opposite edges** has a whole side behind it and is drawn straight -- or, in a
+    picture that :func:`tune_spacing` has found it helps, as a gentle S: one cubic, leaving
+    each end square-on like everything else, its controls ``bow`` along the two inward
+    normals.  A straight strand leaves the edge at a slant while the corner fan beside it
+    leaves square, so the fan's outer arcs have to turn hard at once, and on Q(2,2,2) they
+    piled into a band a tenth of a spacing wide.  Every strand bows by the same amount, which
+    is what keeps them apart: a cubic's height does not depend on its ends' x, so two strands
+    are both ``x = a + (b - a) s(y)`` for one shared ``s``, and their order at every height
+    is their order at the ends.
 
     Every arc keeps its angles whatever else happens to it, because the two controls sit on
     the inward normals and only their length changes.  What changes is one number: how much of
@@ -238,7 +268,14 @@ def strokes(diagram: Diagram) -> list:
         one, two = arc.a.side, arc.b.side
         pa, pb = position(diagram, arc.a), position(diagram, arc.b)
         if OPPOSITE[one] == two:
-            out[k], drawn[k] = Stroke("line", pa, pb), [pa, pb]
+            bow = spacing(diagram)["bow"]
+            if bow <= 0.0:
+                out[k], drawn[k] = Stroke("line", pa, pb), [pa, pb]
+            else:
+                na, nb = INWARD[one], INWARD[two]
+                out[k] = Stroke("curve", pa, pb, (pa[0] + bow * na[0], pa[1] + bow * na[1]),
+                                (pb[0] + bow * nb[0], pb[1] + bow * nb[1]))
+                drawn[k] = out[k].points(16)
             boxes[k] = _box(drawn[k])
             continue
 
@@ -306,6 +343,97 @@ def strokes(diagram: Diagram) -> list:
     return out
 
 
+#: the stretches tried for each alpha curve, as (start, end) along it from z's corner
+SPANS = ((0.0, 1.0), (0.0, 0.8), (0.0, 0.6), (0.2, 1.0), (0.4, 1.0))
+#: past this many arcs a diagram is drawn evenly spaced: tuning costs a few strokes() each
+TUNE_LIMIT = 160
+
+
+def crowding(diagram: Diagram, samples: int = 24, quantile: float = 0.01) -> float:
+    """How close beta comes to itself, as a fraction of the even spacing: 1 is no closer
+    than neighbouring generators, and small means strands running together.
+
+    Sampled, not solved: points along every stroke, each asked for the nearest point on any
+    OTHER stroke, the copies in the eight neighbouring domains included so a seam is no
+    edge.  Points near the boundary are left out, since there a stroke meets its own
+    continuation and the nearest "other" stroke is itself.  The answer is a low quantile
+    rather than the minimum, which is one unlucky pair of samples.
+    """
+    from collections import defaultdict
+    cell = 0.02
+    grid = defaultdict(list)
+    curves = [[s.at(i / samples) for i in range(samples + 1)] for s in strokes(diagram)]
+    for k, points in enumerate(curves):
+        for i in (-1, 0, 1):
+            for j in (-1, 0, 1):
+                for x, y in points:
+                    x, y = x + i, y + j
+                    if -0.1 < x < 1.1 and -0.1 < y < 1.1:
+                        grid[(int(math.floor(x / cell)), int(math.floor(y / cell)))].append(
+                            (k, x, y))
+    gaps = []
+    for k, points in enumerate(curves):
+        for x, y in points:
+            if not (0.04 < x < 0.96 and 0.04 < y < 0.96):
+                continue
+            gx, gy = int(math.floor(x / cell)), int(math.floor(y / cell))
+            best = 0.1
+            for a in range(gx - 4, gx + 5):
+                for b in range(gy - 4, gy + 5):
+                    for j, qx, qy in grid.get((a, b), ()):
+                        if j != k:
+                            best = min(best, math.hypot(qx - x, qy - y))
+            gaps.append(best)
+    if not gaps:
+        return 1.0
+    gaps.sort()
+    even = 1.0 / (max(diagram.x_count, diagram.y_count) + 1)
+    return gaps[int(len(gaps) * quantile)] / even
+
+
+def tune_spacing(diagram: Diagram) -> dict:
+    """Spread each alpha curve's generators over whichever stretch of it draws best, and
+    bow the strands across the domain if that helps.
+
+    Even spacing along the whole edge is not always even spacing of beta.  Q(2,2,2) has
+    thirteen arcs from the left edge to the top, in the wedge between that edge and a
+    strand that leaves the bottom right beside the corner: the lower ones land where the
+    wedge is almost shut, and ran together at a tenth of a spacing.  Gathering the y
+    generators into the top three fifths of the edge lands them where there is room -- but
+    then the fan's arcs leave the top square-on beside a strand leaving it at a slant, and
+    pile up there instead, which is what the bow is for.  Neither helps much alone; the two
+    together take :func:`crowding` from 0.25 of a spacing to 0.79.
+
+    So: with the strands bowed, try each of ``SPANS`` for y and then for x, and keep
+    whatever :func:`crowding` says is least crowded and still draws as clean strokes --
+    unless nothing beats the plain layout.  It is remembered on the diagram.  Only pictures
+    call this.  Moving generators along their curve and bending beta is an isotopy, so no
+    disc changes, but the solver has no reason to pay for the search; the renderer
+    re-attaches regions after tuning, so what is drawn is still exactly the embedding it
+    measured.
+    """
+    if getattr(diagram, "_spacing", None) is not None:
+        return diagram._spacing
+    diagram._spacing = dict(UNIFORM)
+    if len(diagram.arcs) > TUNE_LIMIT:
+        return diagram._spacing
+    plain = dict(UNIFORM)
+    best, score = plain, (crowding(diagram) if stroked(diagram) else 0.0)
+    current = dict(UNIFORM, bow=STRAND_BOW)
+    for curve in ("y", "x"):
+        base = dict(current)
+        for span in SPANS:
+            diagram._spacing = dict(base, **{curve: span})
+            if not stroked(diagram):
+                continue
+            trial = crowding(diagram)
+            if trial > score * 1.05:
+                score, best = trial, dict(diagram._spacing)
+                current = dict(best)
+    diagram._spacing = best
+    return best
+
+
 def route(diagram: Diagram, samples: int = 12) -> list[list[tuple[float, float]]]:
     """A polyline per arc, all inside the unit square and pairwise disjoint.
 
@@ -318,7 +446,8 @@ def route(diagram: Diagram, samples: int = 12) -> list[list[tuple[float, float]]
     ``route_radial``, which is provably embedded for any valid diagram.
     """
     signature = (samples, diagram.x_count, diagram.y_count,
-                 tuple((a.a.side, a.a.index, a.b.side, a.b.index) for a in diagram.arcs))
+                 tuple((a.a.side, a.a.index, a.b.side, a.b.index) for a in diagram.arcs),
+                 tuple(sorted(spacing(diagram).items())))
     cached = getattr(diagram, "_routed", None)
     if cached is not None and cached[0] == signature:
         return cached[1]

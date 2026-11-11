@@ -206,7 +206,8 @@ python3 -m heegaard pattern twin-rainbow -o t.csv    # or: generate 1 2 1, or: p
 python3 -m heegaard solve t.csv -o discs.csv         # the discs
 python3 -m heegaard solve t.csv --format=cfa         # ... as a bordered-cfa CSV
 python3 -m heegaard draw t.csv                       # svg: domain, cover, discs
-python3 -m unittest discover -s tests             # 76 tests, ~31s
+python3 -m heegaard atlas t.csv                      # svg: every disc packed, punctured, 3 sheets
+python3 -m unittest discover -s tests             # 97 tests, ~34s
 ```
 
 ```bash
@@ -394,6 +395,31 @@ has the discs.
    the straight strands could take a slight bow where there is room; and where a fan is
    pinched the give is spread by a soft minimum, which is a smooth fudge rather than a
    considered allocation.
+   - **Pictures re-space before drawing** (`layout.tune_spacing`): the generators of each
+     alpha curve may be gathered into part of the edge and the strands across the domain
+     bowed into square-on S-curves, whichever `layout.crowding` likes best. On Q(2,2,2) that
+     takes the closest 1% of beta from 0.25 of a spacing to 0.79 -- the left-edge fan had
+     been jammed against the strand rising from the hole. Pictures only; the solver keeps
+     even spacing and straight strands, and a test checks the disc table is identical
+     either way. Neither change alone helps: re-spacing alone moves the jam to the top
+     edge, and bowing alone with even spacing makes Q(2,2,2) cross and fall back to radial.
+     Matching an arc's angle to a straight strand across the seam was tried and did not help.
+   - **The user's hand-drawn Q(i,2,2) sheets, redrawn** -- `heegaard-py/figures/qi22.py`,
+     with the six sheets transcribed as data in `figures/qi22_spec.py`: each family's source
+     and target in the user's notation (i, j, k) and the cell where they drew it. Drawn at
+     i=2, j=3, k=0 -- j=3 is the largest at which every j-family exists when i=2, and the
+     thin edge families (rho_1, rho_12, rho_2) grow with j. The U power and chords come from
+     the computed table, not the handwriting. `render_atlas(centres=, rows=, names=,
+     caption=False, key=False, colours=)` is what lays a sheet out by hand. No caption and no
+     key on these, by request -- set six to a page, a key beside each grid is ~2pt text.
+     Coloured by kind as the user coloured them by hand (`GROUPS` in the spec: orange
+     families, green special arrows, pink snail), so same-coloured discs can touch and each
+     gets a darker outline; `--key` puts the key back.
+   - **TODO: a `punctured` toggle for the universal cover** (Python at least):
+     `render_cover` and `render_discs` should take the same `punctured=` option that
+     `render_atlas` already has, drawing every lattice point as a hole -- the corner of the
+     square is the boundary of the bordered diagram -- and `draw` should get the flag. The
+     ellipse-drawing loop in `render_atlas` is the thing to lift out.
 4. **`H(r,s)` on the JS side.** Python has it (`heegaard-py/heegaard/chen.py`); JS does not.
 5. **Integer domain multiplicity** in place of the winding-number check on completed
    candidates — the last float in the JS solver. Note the regions are faces of the

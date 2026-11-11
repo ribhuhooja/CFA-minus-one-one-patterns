@@ -8,6 +8,7 @@
     cat Q222.csv | python3 -m heegaard solve           # ... or from stdin
     python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
     python3 -m heegaard draw Q222.csv --discs=d.csv    # ... reusing a solved disc table
+    python3 -m heegaard atlas Q222.csv                 # every disc, packed, in sheets by kind
     python3 -m heegaard bridge --hrs 3 1               # its names as a 2-bridge link
     python3 -m heegaard bridge --conway 2 1 4          # ... or from either of the others
 
@@ -31,7 +32,7 @@ from .format import (diagram_from_csv, diagram_to_csv, discs_from_csv, discs_to_
                      discs_to_csv)
 from . import bridge as twobridge
 from .patterns import build, catalogue
-from .render import render_cover, render_diagram, render_discs
+from .render import atlas_sheets, render_atlas, render_cover, render_diagram, render_discs
 from .qmn import Q
 from .solver import enumerate_discs
 
@@ -79,6 +80,19 @@ def main(argv: list[str] | None = None) -> int:
     draw.add_argument("--no-labels", dest="labels", action="store_false")
     draw.add_argument("-o", "--out", default="out", help="directory for the svg files")
 
+    atlas = sub.add_parser("atlas", help="svg sheets with every disc packed edge to edge")
+    atlas.add_argument("diagram", nargs="?", default=None, help="a diagram csv; stdin if absent")
+    atlas.add_argument("--discs", default=None,
+                       help="a disc csv to draw; solved from the diagram if absent")
+    atlas.add_argument("--split", default="kind", choices=["kind", "none"],
+                       help="three sheets by kind of operation, or everything on one")
+    atlas.add_argument("--columns", type=int, default=5,
+                       help="how many copies of the domain wide each sheet is")
+    atlas.add_argument("--cell", type=float, default=220, help="pixels per copy of the domain")
+    atlas.add_argument("--no-punctures", dest="punctured", action="store_false",
+                       help="leave the corners of the domain unmarked")
+    atlas.add_argument("-o", "--out", default="out", help="directory for the svg files")
+
     args = parser.parse_args(argv)
 
     try:
@@ -110,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "draw":
             return _draw(args)
+
+        if args.command == "atlas":
+            return _atlas(args)
 
         text = (open(args.diagram, encoding="utf-8").read() if args.diagram
                 else sys.stdin.read())
@@ -172,6 +189,28 @@ def _draw(args) -> int:
     print(note, file=sys.stderr)
     for path in written:
         print(f"  {path}", file=sys.stderr)
+    return 0
+
+
+def _atlas(args) -> int:
+    text = (open(args.diagram, encoding="utf-8").read() if args.diagram
+            else sys.stdin.read())
+    diagram = diagram_from_csv(text)
+    discs = (discs_from_csv(open(args.discs, encoding="utf-8").read()) if args.discs
+             else enumerate_discs(diagram))
+    sheets = (atlas_sheets(discs) if args.split == "kind" else [("all discs", discs)])
+    sheets = [(name, group) for name, group in sheets if group]
+
+    os.makedirs(args.out, exist_ok=True)
+    stem = _stem(diagram.name)
+    print(f"{diagram} -> {len(discs)} discs", file=sys.stderr)
+    for n, (name, group) in enumerate(sheets, 1):
+        title = f"{diagram.name}, sheet {n} of {len(sheets)}: {name}, {len(group)} discs."
+        path = os.path.join(args.out, f"{stem}-atlas-{n}.svg")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(render_atlas(diagram, group, columns=args.columns, cell=args.cell,
+                                      title=title, punctured=args.punctured))
+        print(f"  {path}  ({len(group)} discs: {name})", file=sys.stderr)
     return 0
 
 

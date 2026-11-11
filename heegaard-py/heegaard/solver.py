@@ -98,16 +98,15 @@ def lift(diagram: Diagram, arcs: int, start_tile: tuple[int, int] = (0, 0)) -> T
 
     def node_of(end: Endpoint, tile: tuple[int, int]) -> dict:
         a, b = tile
-        count = diagram.x_count if end.curve == "x" else diagram.y_count
-        along = (end.index + 0.5) / count
+        px, py = position(diagram, end)
         if end.side == "bottom":
-            edge, t, point = f"H:{a}:{b}", along, (a + along, float(b))
+            edge, t, point = f"H:{a}:{b}", px, (a + px, float(b))
         elif end.side == "top":
-            edge, t, point = f"H:{a}:{b + 1}", along, (a + along, float(b + 1))
+            edge, t, point = f"H:{a}:{b + 1}", px, (a + px, float(b + 1))
         elif end.side == "left":
-            edge, t, point = f"V:{a}:{b}", 1 - along, (float(a), b + 1 - along)
+            edge, t, point = f"V:{a}:{b}", py, (float(a), b + py)
         else:
-            edge, t, point = f"V:{a + 1}:{b}", 1 - along, (float(a + 1), b + 1 - along)
+            edge, t, point = f"V:{a + 1}:{b}", py, (float(a + 1), b + py)
         return {"side": end.side, "index": end.index, "tile": tile, "edge": edge,
                 "t": t, "point": point, "name": end.name}
 

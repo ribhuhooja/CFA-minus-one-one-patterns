@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 
 from .diagram import Diagram
-from .layout import position, route, stroked, strokes
+from .layout import position, route, stroked, strokes, tune_spacing
 
 COLOURS = {
     "grid": "#f0b9b9",          # the alpha curves
@@ -124,6 +124,7 @@ def caption_for(diagram: Diagram, extra: str = "") -> str:
 def render_diagram(diagram: Diagram, cell: float = 460, labels: bool = True,
                    basepoints: bool = True, caption: str | None = None) -> str:
     """One copy of the domain: the alpha curves as its boundary, beta inside it."""
+    tune_spacing(diagram)
     paths = route(diagram)
     text = caption_for(diagram) if caption is None else caption
     pad = max(30.0, cell * 0.11)
@@ -210,6 +211,7 @@ def render_cover(diagram: Diagram, tiles: int = 3, cell: float = 200,
     runs off one edge and comes back on the next tile along, and a disc is a piece of that
     lifted curve closed up along the grid.
     """
+    tune_spacing(diagram)
     tx, ty = (tiles, tiles) if isinstance(tiles, int) else tiles
     paths = route(diagram)
     text = (caption_for(diagram, f"universal cover, {tx} x {ty} domains")
@@ -285,6 +287,19 @@ def render_cover(diagram: Diagram, tiles: int = 3, cell: float = 200,
 
 
 # ------------------------------------------------------------------ the discs
+
+def _fresh(diagram: Diagram, discs):
+    """Copies of the discs with no polygon yet, for the embedding the picture will use.
+
+    A picture spreads the generators out first (:func:`~heegaard.layout.tune_spacing`), so a
+    region the solver attached in its own even-spaced embedding is the same disc in a
+    slightly different place.  Drawing it over the re-spaced beta would put its edges beside
+    the strands rather than on them, so every disc is re-attached here instead.
+    """
+    from dataclasses import replace
+    tune_spacing(diagram)
+    return [replace(d, region=None) for d in discs]
+
 
 def bounding_box(polygon):
     xs = [p[0] for p in polygon]
@@ -385,6 +400,7 @@ def render_discs(diagram: Diagram, discs, cell: float = 74, limit: int | None = 
     # canonical order first, so the picture depends on which discs there are and not on the
     # order they arrived in: a table solved here and the same table read back from a file --
     # or written by the JS solver -- must draw the same picture.
+    discs = _fresh(diagram, discs)
     discs = sorted(discs, key=lambda d: (_gen_key(d.source), _gen_key(d.target), d.U, d.word))
     chosen, classes = (sample_discs(discs, limit) if limit and len(discs) > limit
                        else (list(discs), len({f"{d.word}|{d.U}" for d in discs})))
@@ -467,6 +483,418 @@ def render_discs(diagram: Diagram, discs, cell: float = 74, limit: int | None = 
                  f'font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" '
                  f'fill="{COLOURS["ink"]}">{_esc(text)}</text>')
     return _svg(W, H, "\n  ".join(parts), f"{diagram.name} discs")
+
+
+# ------------------------------------------------------------------ the atlas
+
+def atlas_sheets(discs):
+    """The discs split by what kind of operation each one is, for an atlas in a few sheets.
+
+    The ``x`` generators are ``iota_1`` and the ``y`` are ``iota_0``, and the split is the one
+    the idempotents suggest: the operations that start and end at ``x``, then everything else
+    cut by length of chord word -- the differentials and ``m_2``, then the higher products.
+    On Q(2,2,2) that is 42, 37 and 31 discs.
+    """
+    xx = [d for d in discs if d.source[0] == "x" and d.target[0] == "x"]
+    rest = [d for d in discs if not (d.source[0] == "x" and d.target[0] == "x")]
+    return [("x → x", xx),
+            ("into or out of y, at most one chord", [d for d in rest if len(d.chords) <= 1]),
+            ("into or out of y, two chords or more", [d for d in rest if len(d.chords) >= 2])]
+
+
+def _raster(polygon, R: int):
+    """The pixels of a polygon on a grid of ``R`` per copy of the domain, as row bitmasks.
+
+    A pixel is in when its centre is, by the even-odd rule along each row.  Rows as Python
+    ints, so that sliding a disc by a whole copy is a shift and a collision is an ``&``.
+    Returns ``{row: mask}`` with bit ``k`` the pixel whose centre is at ``(k + 1/2) / R``.
+    """
+    rows: dict[int, int] = {}
+    ys = [p[1] for p in polygon]
+    edges = list(zip(polygon, polygon[1:] + polygon[:1]))
+    for iy in range(math.floor(min(ys) * R), math.ceil(max(ys) * R) + 1):
+        yc = (iy + 0.5) / R
+        xs = sorted(a[0] + (yc - a[1]) * (b[0] - a[0]) / (b[1] - a[1])
+                    for a, b in edges if (a[1] <= yc) != (b[1] <= yc))
+        mask = 0
+        for left, right in zip(xs[::2], xs[1::2]):
+            k0, k1 = math.ceil(left * R - 0.5), math.floor(right * R - 0.5)
+            if k1 >= k0:
+                mask |= ((1 << (k1 - k0 + 1)) - 1) << k0
+        if mask:
+            rows[iy] = mask
+    return rows
+
+
+def _rows_shift(rows, dx: int, dy: int):
+    return {y + dy: (m << dx if dx >= 0 else m >> -dx) for y, m in rows.items()}
+
+
+def _deepest(rows):
+    """A pixel as far inside as the mask goes, by eroding until nothing is left, and how
+    many erosions that took -- which is roughly the radius, in pixels, of room for a label."""
+    depth = 0
+    while True:
+        inner = {}
+        for y, m in rows.items():
+            e = m & (m << 1) & (m >> 1) & rows.get(y - 1, 0) & rows.get(y + 1, 0)
+            if e:
+                inner[y] = e
+        if not inner:
+            break
+        rows, depth = inner, depth + 1
+    ys = sorted(rows)
+    y = ys[len(ys) // 2]
+    bits = [k for k in range(rows[y].bit_length()) if rows[y] >> k & 1]
+    return bits[len(bits) // 2], y, depth
+
+
+def pack_tight(regions, columns: int, R: int = 48):
+    """Slide each disc by a whole number of copies into a strip ``columns`` copies wide,
+    as low as it will go without overlapping anything already placed.
+
+    Unlike :func:`pack_into_slots` this tests the discs themselves and not their boxes, so a
+    thin disc can sit in the crook of a fat one -- which is most of what makes an atlas
+    dense.  Largest first, then the lowest row and leftmost column that is free.  Integer
+    shifts only, so every disc is still a lift of itself.  Returns the shifts and the rasters
+    at their final places.
+    """
+    rasters = [_raster(r, R) for r in regions]
+    width = columns * R
+    order = sorted(range(len(regions)), key=lambda k: -sum(bin(m).count("1")
+                                                          for m in rasters[k].values()))
+    occupied: dict[int, int] = {}
+    shifts, placed = [None] * len(regions), [None] * len(regions)
+    for k in order:
+        rows = rasters[k]
+        lo = min((m & -m).bit_length() - 1 for m in rows.values())
+        hi = max(m.bit_length() for m in rows.values())
+        bottom = min(rows)
+        if hi - lo > width:
+            raise ValueError(f"a disc is wider than {columns} copies of the domain")
+        a_range = range(math.ceil(-lo / R), math.floor((width - hi) / R) + 1)
+        b = math.ceil(-bottom / R)
+        while shifts[k] is None:
+            for a in a_range:
+                if not any((m << (a * R) if a >= 0 else m >> (-a * R))
+                           & occupied.get(y + b * R, 0) for y, m in rows.items()):
+                    shifts[k] = (a, b)
+                    break
+            else:
+                b += 1
+        a, b = shifts[k]
+        placed[k] = _rows_shift(rows, a * R, b * R)
+        for y, m in placed[k].items():
+            occupied[y] = occupied.get(y, 0) | m
+    return shifts, placed
+
+
+def _touching(p, q, reach: int = 3) -> bool:
+    """Do two placed rasters come within ``reach`` pixels of each other?"""
+    for y, m in p.items():
+        grown = 0
+        for s in range(reach + 1):
+            grown |= (m << s) | (m >> s)
+        for dy in range(-reach, reach + 1):
+            if grown & q.get(y + dy, 0):
+                return True
+    return False
+
+
+#: the look of a figure in a paper: Computer Modern, black ink, alpha in red, beta in blue.
+#: Latin Modern and CMU are both Computer Modern as OpenType; neither is a system font, so
+#: the svg names them and falls back to any serif.  TeX Live ships both (`kpsewhich lmroman10-regular.otf`).
+ATLAS_FONT = "'Latin Modern Roman', 'LM Roman 10', 'CMU Serif', 'Computer Modern Serif', serif"
+ATLAS_INK = {"alpha": "#d7372b", "beta": "#2b3bd1", "ink": "#000000", "paper": "#ffffff"}
+
+#: pale enough that beta reads through every one of them; neighbours never share one
+ATLAS_PALETTE = ["#f4a6a0", "#9fc5e8", "#b6d7a8", "#ffe599", "#d5a6e6", "#f9cb9c",
+                 "#a2c4c9", "#ea9999", "#c9daf8", "#d9ead3", "#fff2cc", "#ead1dc",
+                 "#b4a7d6", "#ffd966", "#93c47d", "#76a5af", "#e6b8af", "#cfe2f3",
+                 "#f6b26b", "#8eb8e5", "#c27ba0", "#a4c2a5", "#e0c48c", "#bfbfbf"]
+
+
+def _sub(base: str, y: float, low: str = "", high: str = "", size: float = 12.0,
+         italic: bool = True) -> str:
+    """``base`` with a subscript and/or superscript, as tspans on the baseline ``y``.
+
+    Every piece carries an absolute ``y`` rather than a ``dy`` that is undone afterwards: the
+    undoing would need a tspan of its own, Inkscape skips an empty one, and then every script
+    leaves the rest of the line a little lower -- which reads as the line slanting."""
+    small = _fmt(size * 0.7)
+    style = ' font-style="italic"' if italic else ""
+    out = f'<tspan y="{_fmt(y)}"{style}>{base}</tspan>'
+    if low:
+        out += f'<tspan y="{_fmt(y + size * 0.25)}" font-size="{small}">{_script(low)}</tspan>'
+    if high:
+        out += f'<tspan y="{_fmt(y - size * 0.4)}" font-size="{small}">{_script(high)}</tspan>'
+    return out
+
+
+def _script(text: str) -> str:
+    """An index as TeX sets it: letters italic, digits upright, and a real minus sign.  So a
+    family's index, ``8i-3+j``, reads as maths and not as a filename."""
+    text = text.strip("{}")
+    out = []
+    for c in text:
+        if c.isalpha():
+            out.append(f'<tspan font-style="italic">{_esc(c)}</tspan>')
+        else:
+            out.append("\u2212" if c == "-" else _esc(c))
+    return "".join(out)
+
+
+def _plain(text: str, y: float) -> str:
+    return f'<tspan y="{_fmt(y)}">{text}</tspan>'
+
+
+#: Latin Modern Roman has no Greek; the rho is MATHEMATICAL ITALIC SMALL RHO from Latin
+#: Modern Math, which is the glyph TeX's \\rho sets, falling back to an ordinary rho
+_RHO = ("<tspan font-family=\"'Latin Modern Math', 'STIX Two Math', 'Cambria Math', serif\">"
+        "\U0001D70C</tspan>")
+
+
+def _generator(name: str, y: float, size: float) -> str:
+    curve, _, index = name.partition("_")
+    return _sub(_esc(curve), y, index, size=size) if index else _plain(_esc(name), y)
+
+
+def _operation(disc, y: float, size: float, names=None) -> str:
+    """The disc as the operation it is: ``m_{n+1}(x, rho_a, ...) = U^k y``.
+
+    ``names`` replaces the source and target with other spellings of them -- a family's,
+    say, ``("y_j", "x_{8i-3+j}")`` -- while the U power and the chords stay the disc's own.
+    """
+    source, target = names or (disc.source, disc.target)
+    chords = [c.replace("rho_", "") for c in disc.chords]
+    args = [_generator(source, y, size)] + [_sub(_RHO, y, c, size=size, italic=False)
+                                            for c in chords]
+    power = "" if disc.U == 0 else (_sub("U", y, high="" if disc.U == 1 else str(disc.U),
+                                         size=size) + _plain("\u2009", y))
+    # fixed-width spaces, as TeX would set them: SVG collapses an ordinary space at the edge
+    # of a tspan, and every space here is at an edge
+    return (_sub("m", y, str(len(chords) + 1), size=size) + _plain("(", y)
+            + _plain(",\u2006", y).join(args) + _plain(")\u2004=\u2004", y)
+            + power + _generator(target, y, size))
+
+
+def _operation_width(disc, size: float, names=None) -> float:
+    """An estimate of how wide :func:`_operation` sets, in the same spirit as _text_width."""
+    source, target = names or (disc.source, disc.target)
+    chars = 8 + len(source) + len(target) + 3 * len(disc.chords) \
+        + sum(len(c) - 4 for c in disc.chords) * 0.7 + (2 if disc.U else 0)
+    return chars * size * 0.5
+
+
+def _italic_letters(text: str) -> str:
+    """Set the one-letter words of a caption -- x, y, Q, U -- in italic, as maths."""
+    import re
+    return re.sub(r"(?<![\w(])([A-Za-z])(?![\w])",
+                  lambda m: f'<tspan font-style="italic">{m.group(1)}</tspan>', _esc(text))
+
+
+def _darker(hue: str, by: float = 0.55) -> str:
+    """The same colour, darker: an outline for a fill."""
+    r, g, b = (int(hue[i:i + 2], 16) for i in (1, 3, 5))
+    return "#" + "".join(f"{round(c * by):02x}" for c in (r, g, b))
+
+
+def _hue(colour) -> str:
+    """A palette index, or a colour given outright."""
+    return colour if isinstance(colour, str) else ATLAS_PALETTE[colour]
+
+
+def render_atlas(diagram: Diagram, discs, columns: int = 5, cell: float = 220,
+                 title: str | None = None, punctured: bool = True, alpha: float = 0.9,
+                 key: bool = True, centres=None, rows: int | None = None, names=None,
+                 caption: bool = True, colours=None, number: float = 14.0,
+                 numbers: bool = True) -> str:
+    """Discs packed edge to edge on a strip of the universal cover, one colour each.
+
+    The dense counterpart of :func:`render_discs`: every disc is slid by a lattice vector
+    (so it is still an honest lift) into the lowest free place in a strip ``columns`` copies
+    wide, tested against the other discs' actual shapes rather than their boxes.  Each disc
+    carries a number at its deepest point, and the key beside the strip says which operation
+    it is.  Numbers follow (word, U, source, target), so the key reads grouped by kind.
+
+    Drawn as a figure for a paper: Computer Modern, blue beta, red alpha, pale fills.  The
+    cell is large on purpose -- Q(2,2,2) has thirty generators along one edge, and below
+    about 200 pixels a side its strands run together into a solid band.
+
+    ``punctured`` draws the boundary of the bordered diagram: the corner of the square is the
+    puncture, so every lattice point of the cover is a hole.
+
+    To lay a sheet out by hand instead, give ``centres``: for each disc, where its middle
+    should land, in copies of the domain from the bottom-left of the sheet.  Each disc is
+    moved by the lattice vector that brings its box's centre nearest there, the discs keep
+    the order given and are numbered in it, and ``rows`` fixes the height.  ``names`` gives
+    the key other spellings of each disc's source and target, and ``caption=False`` leaves
+    the line under the picture to whoever is placing the figure.  ``colours`` gives each
+    disc its fill outright -- to colour by kind rather than keep neighbours apart -- and
+    ``number`` is the size of the numbers on the discs, which only mean anything beside a
+    key -- ``numbers=False`` leaves them off.
+    """
+    from .format import _gen_key
+    from .solver import attach_regions
+
+    discs = _fresh(diagram, discs)
+    if not discs:
+        raise ValueError("no discs to draw")
+    R = 48
+    if centres is None:
+        discs = sorted(discs, key=lambda d: (len(d.chords), d.word, d.U,
+                                             _gen_key(d.source), _gen_key(d.target)))
+        attach_regions(diagram, discs)
+        shifts, placed = pack_tight([d.region for d in discs], columns, R)
+    else:
+        attach_regions(diagram, discs)
+        shifts = []
+        for disc, (cx, cy) in zip(discs, centres):
+            box = bounding_box(disc.region)
+            shifts.append((round(cx - (box[0] + box[2]) / 2), round(cy - (box[1] + box[3]) / 2)))
+        placed = [_rows_shift(_raster(d.region, R), a * R, b * R)
+                  for d, (a, b) in zip(discs, shifts)]
+    regions = [[(x + a, y + b) for x, y in d.region] for d, (a, b) in zip(discs, shifts)]
+    rows_used = rows or math.ceil(max(max(p) for p in placed) / R)
+    names = names or [None] * len(discs)
+
+    text = title or f"{diagram.name}, {len(discs)} discs"
+    ink, size = ATLAS_INK, 15.0
+    margin, foot = 20.0, (52.0 if caption else 0.0)
+    total_w, total_h = columns * cell, rows_used * cell
+    line, key_w = size * 1.55, 0.0
+    if key:
+        key_w = 60 + max(_operation_width(d, size, n) for d, n in zip(discs, names))
+    W = total_w + 2 * margin + key_w
+    H = max(total_h, line * (len(discs) + 1)) + 2 * margin + foot
+    if caption:
+        W = max(W, _text_width(text, 17) + 80 + 2 * margin)
+
+    def to(p):
+        return (margin + p[0] * cell, margin + total_h - p[1] * cell)
+
+    parts = [f'<rect width="{_fmt(W)}" height="{_fmt(H)}" fill="{ink["paper"]}"/>',
+             f'<clipPath id="strip"><rect x="{_fmt(margin)}" y="{_fmt(margin)}" '
+             f'width="{_fmt(total_w)}" height="{_fmt(total_h)}"/></clipPath>',
+             '<g clip-path="url(#strip)">']
+
+    # colour: greedy over discs in order of size, never matching a disc it touches
+    colour = [-1] * len(discs) if colours is None else list(colours)
+    for k in (sorted(range(len(discs)), key=lambda k: -abs(discs[k].area))
+              if colours is None else ()):
+        taken = {colour[j] for j in range(len(discs))
+                 if colour[j] >= 0 and _touching(placed[k], placed[j])}
+        c = k % len(ATLAS_PALETTE)
+        while c in taken and len(taken) < len(ATLAS_PALETTE):
+            c = (c + 1) % len(ATLAS_PALETTE)
+        colour[k] = c
+
+    for k, disc in enumerate(discs):
+        hue = _hue(colour[k])
+        d = _path_d([to(p) for p in regions[k]]) + "Z"
+        label = f"{disc.source} -> {disc.target}  U^{disc.U}  {disc.word or 'no chords'}"
+        # coloured by kind, two discs of one colour can touch, and only an edge tells them
+        # apart; coloured to keep neighbours apart, they never need one
+        edge = ("none" if colours is None
+                else f'{_darker(hue)}" stroke-width="1.4" stroke-linejoin="round')
+        parts.append(f'<path d="{d}" fill="{hue}" fill-opacity="{alpha}" stroke="{edge}">'
+                     f'<title>{k + 1}: {_esc(label)}</title></path>')
+
+    tile = "".join(f'<path d="{d}"/>'
+                   for d in beta_paths(diagram, lambda q: to((q[0], q[1] + rows_used - 1))))
+    parts.append(f'<defs><g id="beta" fill="none" stroke="{ink["beta"]}" '
+                 f'stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round">'
+                 f'{tile}</g></defs>')
+    for i in range(columns):
+        for j in range(rows_used):
+            parts.append(f'<use href="#beta" x="{_fmt(i * cell)}" '
+                         f'y="{_fmt((rows_used - 1 - j) * cell)}"/>')
+
+    parts.append(f'<g stroke="{ink["alpha"]}" stroke-width="1.6">')
+    for i in range(columns + 1):
+        a, b = to((i, 0)), to((i, rows_used))
+        parts.append(f'<line x1="{_fmt(a[0])}" y1="{_fmt(a[1])}" '
+                     f'x2="{_fmt(b[0])}" y2="{_fmt(b[1])}"/>')
+    for j in range(rows_used + 1):
+        a, b = to((0, j)), to((columns, j))
+        parts.append(f'<line x1="{_fmt(a[0])}" y1="{_fmt(a[1])}" '
+                     f'x2="{_fmt(b[0])}" y2="{_fmt(b[1])}"/>')
+    parts.append("</g>")
+
+    _, w_at = _basepoints(diagram)
+    if w_at is not None:
+        parts.append(f'<g fill="{ink["ink"]}">')
+        for i in range(columns):
+            for j in range(rows_used):
+                x, y = to((w_at[0] + i, w_at[1] + j))
+                parts.append(f'<circle cx="{_fmt(x)}" cy="{_fmt(y)}" r="2"/>')
+        parts.append("</g>")
+
+    if punctured:
+        rx, ry = cell * 0.028, cell * 0.04
+        parts.append(f'<g fill="{ink["paper"]}" stroke="{ink["ink"]}" stroke-width="1">')
+        for i in range(columns + 1):
+            for j in range(rows_used + 1):
+                x, y = to((i, j))
+                parts.append(f'<ellipse cx="{_fmt(x)}" cy="{_fmt(y)}" rx="{_fmt(rx)}" '
+                             f'ry="{_fmt(ry)}"/>')
+        parts.append("</g>")
+    parts.append("</g>")
+
+    parts.append(f'<rect x="{_fmt(margin)}" y="{_fmt(margin)}" width="{_fmt(total_w)}" '
+                 f'height="{_fmt(total_h)}" fill="none" stroke="{ink["alpha"]}" '
+                 f'stroke-width="1.6"/>')
+
+    parts.append(f'<g font-family="{ATLAS_FONT}" font-size="{_fmt(number)}" '
+                 f'fill="{ink["ink"]}" text-anchor="middle" stroke="{ink["paper"]}" '
+                 f'stroke-width="{_fmt(number * 0.2)}" stroke-linejoin="round" '
+                 f'paint-order="stroke">')
+    for k in range(len(discs) if numbers else 0):
+        px, py, depth = _deepest(placed[k])
+        if depth * cell / R >= number * 0.6:
+            x, y = to(((px + 0.5) / R, (py + 0.5) / R))
+            parts.append(f'<text x="{_fmt(x)}" y="{_fmt(y + number * 0.34)}">{k + 1}</text>')
+        else:
+            # too thin to hold its own number without hiding under it: put the number
+            # beside the disc, off whichever end is not against the edge of the strip
+            mask = placed[k]
+            right = max(m.bit_length() for m in mask.values())
+            if right < (columns - 0.15) * R:
+                row = max(mask, key=lambda y: mask[y].bit_length())
+                x, y = to((right / R, (row + 0.5) / R))
+                x, anchor = x + 3, "start"
+            else:
+                left = min((m & -m).bit_length() - 1 for m in mask.values())
+                row = next(y for y in sorted(mask) if (mask[y] & -mask[y]).bit_length() - 1
+                           == left)
+                x, y = to((left / R, (row + 0.5) / R))
+                x, anchor = x - 3, "end"
+            parts.append(f'<text x="{_fmt(x)}" y="{_fmt(y + number * 0.34)}" '
+                         f'text-anchor="{anchor}">{k + 1}</text>')
+    parts.append("</g>")
+
+    if key:
+        x0 = margin + total_w + 30
+        parts.append(f'<g font-family="{ATLAS_FONT}" font-size="{_fmt(size)}" '
+                     f'fill="{ink["ink"]}">')
+        for k, disc in enumerate(discs):
+            y = margin + line * (k + 0.8)
+            hue = _hue(colour[k])
+            parts.append(f'<rect x="{_fmt(x0)}" y="{_fmt(y - size * 0.72)}" '
+                         f'width="{_fmt(size * 0.8)}" height="{_fmt(size * 0.8)}" '
+                         f'fill="{hue}" stroke="{ink["ink"]}" stroke-width="0.5"/>'
+                         f'<text x="{_fmt(x0 + 46)}" y="{_fmt(y)}" text-anchor="end">'
+                         f'{k + 1}</text>'
+                         f'<text x="{_fmt(x0 + 56)}" y="{_fmt(y)}">'
+                         f'{_operation(disc, y, size, names[k])}</text>')
+        parts.append("</g>")
+
+    if caption:
+        parts.append(f'<text x="{_fmt(margin)}" y="{_fmt(H - margin)}" font-family="{ATLAS_FONT}" '
+                     f'font-size="17" fill="{ink["ink"]}">'
+                     f'A<tspan font-size="13" letter-spacing="0.6">TLAS</tspan>. '
+                     f'{_italic_letters(text)}</text>')
+    return _svg(W, H, "\n  ".join(parts), text)
 
 
 # ------------------------------------------------------------------ the Chen form

@@ -13,6 +13,7 @@ python3 -m heegaard solve Q222.csv -o discs.csv    # its discs
 python3 -m heegaard solve Q222.csv --format=cfa    # ... as a bordered-cfa CSV
 cat Q222.csv | python3 -m heegaard solve           # or as a filter
 python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
+python3 -m heegaard atlas Q222.csv                 # svg: every disc, packed, in sheets
 python3 -m unittest discover -s tests
 ```
 
@@ -94,7 +95,35 @@ cat Q222.csv | python3 -m heegaard draw --only=cover # or as a filter
 many discs to draw (`0` for all), `--arrange=insitu` leaves discs where the enumeration found
 them instead of packing them into free slots, `--no-labels` drops the per-disc text.
 
-`heegaard.render` is the library behind it: `render_diagram`, `render_cover`, `render_discs`.
+`python3 -m heegaard atlas Q222.csv` is the dense version: every disc, slid by whole copies
+of the domain into the lowest free place in a strip `--columns` copies wide (default 5),
+tested against the other discs' actual shapes rather than their boxes, so a thin disc sits in
+the crook of a fat one. One colour per disc, a number at its deepest point, and a key beside
+the strip. The corners of the domain are drawn as punctures, since this is a bordered
+diagram (`--no-punctures` to leave them off). `--split=kind` (the default) writes three sheets
+-- `x -> x`, then the rest with at most one chord, then the rest with two or more; on
+Q(2,2,2) that is 42, 37 and 31 discs -- and `--split=none` one sheet. Packing is a raster of
+48 pixels per copy, so two discs may still share a sliver thinner than 1/48 of the domain.
+
+The atlas is styled as a figure for a paper: Computer Modern (Latin Modern Roman, with the
+rho from Latin Modern Math), blue beta, red alpha, pale fills, and each disc keyed as the
+operation it is, `m_{n+1}(x, rho_a, ...) = U^k y`. Those fonts ship with TeX Live but are not
+system fonts, so a browser shows the SVG in a fallback serif. For the real look, point
+fontconfig at TeX Live's copies and let Inkscape write a PDF with the text as outlines:
+
+```bash
+cat > fonts.conf <<'XML'
+<?xml version="1.0"?><fontconfig>
+  <dir>/System/Library/Fonts</dir><dir>/Library/Fonts</dir>
+  <dir>/usr/local/texlive/2024/texmf-dist/fonts/opentype/public/lm</dir>
+  <dir>/usr/local/texlive/2024/texmf-dist/fonts/opentype/public/lm-math</dir>
+</fontconfig>
+XML
+FONTCONFIG_FILE=$PWD/fonts.conf inkscape out/Q222-atlas-1.svg --export-type=pdf,png --export-text-to-path
+```
+
+`heegaard.render` is the library behind it: `render_diagram`, `render_cover`, `render_discs`,
+`render_atlas`.
 No dependency, no rasteriser — SVG is text, and a browser or Inkscape can turn it into a PNG.
 
 Two things make this more than decoration:

@@ -20,7 +20,8 @@ from heegaard.chen import (H, chen_form, cut_height, is_connected,
                            main_region_winding, polyline, recut, sigma, wrapped)
 from heegaard.layout import (crossings_between, nesting, route, route_radial,
                              stroked, strokes)
-from heegaard.render import render_cover, render_diagram, render_discs
+from heegaard.render import (atlas_sheets, pack_tight, render_atlas, render_cover,
+                             render_diagram, render_discs)
 from heegaard.solver import attach_regions, enumerate_discs, reeb_chords
 
 #: (i, m, n) -> (discs, sha256 of the disc csv), from heegaard-js
@@ -155,6 +156,27 @@ class Layout(unittest.TestCase):
             clear = not crossings_between([p.points(10) for p in strokes(diagram)])
             self.assertEqual(stroked(diagram), clear, diagram.name)
             self.assertEqual(crossings_between(route(diagram)), [], diagram.name)
+
+    def test_tuning_the_spacing_spreads_beta_out_and_changes_no_disc(self):
+        """Re-spacing the generators and bowing the strands is an isotopy, so the solver must
+        give exactly the same table in the tuned embedding -- and the point of it is that the
+        closest strands of Q(2,2,2), at a quarter of a spacing evenly spaced, come apart."""
+        from heegaard.layout import crowding, tune_spacing
+        diagram = Q(2, 2, 2)
+        plain = discs_to_csv(enumerate_discs(diagram), diagram)
+        before = crowding(diagram)
+        tuned = tune_spacing(diagram)
+        self.assertNotEqual(tuned["y"], (0.0, 1.0))
+        self.assertTrue(stroked(diagram))
+        self.assertLess(before, 0.3)
+        self.assertGreater(crowding(diagram), 0.6)
+        self.assertEqual(discs_to_csv(enumerate_discs(diagram), diagram), plain)
+
+    def test_the_route_is_not_reused_across_a_change_of_spacing(self):
+        diagram = Q(1, 2, 2)
+        evenly = route(diagram)
+        diagram._spacing = {"x": (0.0, 1.0), "y": (0.0, 0.6), "bow": 0.3}
+        self.assertNotEqual(route(diagram), evenly)
 
     def test_the_hand_drawn_diagram_draws_as_strokes(self):
         """twin-rainbow is the one this was built for, so pin it: every arc one piece of
@@ -449,6 +471,51 @@ class Render(unittest.TestCase):
         without = render_discs(self.diagram, self.discs, labels=False)
         self.assertIn("U^", with_labels)
         self.assertLess(without.count("<text"), with_labels.count("<text"))
+
+
+class Atlas(unittest.TestCase):
+    """The dense atlas: packed by the discs' shapes, so check that the shapes never meet."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.diagram = Q(2, 2, 2)
+        cls.discs = enumerate_discs(cls.diagram)
+        attach_regions(cls.diagram, cls.discs)
+
+    def test_the_sheets_split_the_discs(self):
+        sheets = atlas_sheets(self.discs)
+        self.assertEqual([len(g) for _, g in sheets], [42, 37, 31])
+        self.assertEqual(sorted(id(d) for _, g in sheets for d in g),
+                         sorted(id(d) for d in self.discs))
+
+    def test_no_two_packed_discs_overlap_and_all_fit_the_strip(self):
+        R, columns = 48, 5
+        for _, group in atlas_sheets(self.discs):
+            shifts, placed = pack_tight([d.region for d in group], columns, R)
+            self.assertTrue(all(isinstance(a, int) and isinstance(b, int) for a, b in shifts))
+            seen = {}
+            for rows in placed:
+                for y, m in rows.items():
+                    self.assertGreaterEqual(y, 0)
+                    self.assertLessEqual(m.bit_length(), columns * R)
+                    self.assertEqual(seen.get(y, 0) & m, 0)
+                    seen[y] = seen.get(y, 0) | m
+
+    def test_every_disc_is_drawn_and_numbered_and_every_corner_punctured(self):
+        import xml.etree.ElementTree as ET
+        group = atlas_sheets(self.discs)[0][1]
+        svg = render_atlas(self.diagram, group, columns=5, cell=120)
+        ET.fromstring(svg)
+        self.assertEqual(svg.count("<title>") - 1, len(group))
+        rows = int(round(float(svg.split('clipPath id="strip"><rect')[1]
+                               .split('height="')[1].split('"')[0]) / 120))
+        self.assertEqual(svg.count("<ellipse"), 6 * (rows + 1))
+        self.assertEqual(render_atlas(self.diagram, group, punctured=False).count("<ellipse"), 0)
+
+    def test_the_atlas_does_not_depend_on_disc_order(self):
+        group = atlas_sheets(self.discs)[2][1]
+        self.assertEqual(render_atlas(self.diagram, group),
+                         render_atlas(self.diagram, list(reversed(group))))
 
 
 def q_parameters(i, m, n):
