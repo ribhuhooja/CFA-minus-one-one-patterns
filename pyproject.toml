@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 authors = [{ name = "Ribhu Hooja" }]
-# license: not chosen yet -- add `license = "..."` and a LICENSE file before any upload
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["knot Floer homology", "bordered Floer homology", "satellite knots",
             "Heegaard diagrams", "low-dimensional topology"]
 classifiers = [
