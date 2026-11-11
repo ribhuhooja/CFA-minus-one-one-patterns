@@ -37,20 +37,25 @@ not check the `A_infinity` relations; we check `d^2 = 0`.
 
 ## Layout
 
-Four packages, no dependencies, no build step. Modules are quarantined by language, and
-**everything new is Python** — it is slower but it is what gets packaged and uploaded.
+Two JS packages and one Python package, `satellite-floer` (import `satellite_floer`), no
+dependencies. Modules are quarantined by language, and **everything new is Python** — it is
+slower but it is what gets packaged and uploaded. `pyproject.toml` is at the repository root;
+the wheel holds `satellite_floer/` and nothing else, and `tests/`, `docs/`, `figures/` and the
+JS stay in the repository only.
 
 | | |
 |---|---|
 | **`grid-arc-js/`** | the geometry. Given a simple arc on the unit grid, find the grid path joining its endpoints whose enclosed region contains no forbidden point. Knows nothing about Heegaard diagrams. |
 | **`heegaard-js/`** | jobs 1 and 2 in JS. Builds `Q(i,m,n)` as `H(r,s)`, draws it, lifts beta to the universal cover, feeds pieces of beta to the solver, reads off Reeb chords and U powers. |
-| **`heegaard-py/`** | jobs 1 and 2 in Python: a `Diagram` you build with `add_arc`, the validator, the catalogue in `patterns.py`, `chen.py` for general `H(r,s)`, the solver, an SVG visualiser. |
-| **`bordered-py/`** | job 3. The torus algebra, `CFA^-`, `CFDhat`, `CFK^-`, the box tensor. Imports nothing from `heegaard`. |
+| **`satellite_floer/heegaard/`** | jobs 1 and 2 in Python: a `Diagram` you build with `add_arc`, the validator, the catalogue in `patterns.py`, `chen.py` for general `H(r,s)`, the solver, an SVG visualiser. |
+| **`satellite_floer/bordered/`** | job 3. The torus algebra, `CFA^-`, `CFDhat`, `CFK^-`, the box tensor. Imports nothing from `heegaard`. |
+| **`satellite_floer/cli.py`** | the one `satellite-floer` command. Each half has a `cli.py` with `register(sub)` and `run(args)`; this joins them and reports errors. It is, with `tests/test_together.py`, the only place that sees both halves. |
 
-Inside `heegaard-py` the two jobs are already separate: `solver.py` imports `diagram` and
+Inside `satellite_floer/heegaard` the two jobs are already separate: `solver.py` imports `diagram` and
 `layout` and nothing else, and nothing on the diagram side imports the solver (`format.py`
 defers its one `solver` import into the function body on purpose, to keep the import graph a
-tree). `bordered` imports neither.
+tree). `bordered` imports neither, and `tests/test_bordered.py` checks that by reading its
+source.
 
 `src/` in both JS packages is pure: no DOM, no Node builtins, no I/O. `index.html` (the
 viewers) and the CLIs are the only impure things. **Verified**: `src/` imports nothing but its
@@ -61,153 +66,44 @@ which are one-off study code.
 
 ## The file formats
 
-This is the whole coupling between the three jobs. Each is a CSV: one header row, no quoting
-(no field ever contains a comma), and metadata above it as `# key: value` lines, which
-`pandas.read_csv(f, comment='#')` ignores. The first `#` line with no colon is the format
-name and version.
-
-Generator names are opaque strings without commas or spaces. A **chord word** is Reeb chords
-concatenated with no separator, each spelled `P` + digits: `P1 P2 P3 P12 P23 P123`. The `P`
-delimits, so `P1P23` and `P123` are different strings and the tokenisation is unambiguous.
-The empty word is the empty field. Words are in **path order, never reversed**.
-
-### `heegaard-diagram 1` — a bordered Heegaard diagram
-
-```
-# heegaard-diagram 1
-# name: twin-rainbow
-# x-generators: 8
-# y-generators: 5
-# basepoint: z corner
-# basepoint: w arc 1
-side_a,index_a,side_b,index_b,family
-bottom,0,bottom,3,rainbow
-left,4,bottom,4,left-bottom
-```
-
-Combinatorics only. One row per arc of beta; an endpoint names the **edge** (`bottom` `top`
-`left` `right`) and the index along it, because bottom and top are the same alpha curve but
-different sides of the fundamental domain. `family` is a label for the human. Where an arc is
-*drawn* is a rendering decision made later and nothing depends on it.
-
-### `heegaard-discs 1` — the discs a diagram bounds
-
-```
-# heegaard-discs 1
-# diagram: twin-rainbow
-# x-generators: 8
-# y-generators: 5
-# reeb-convention: composed
-# count: 25
-source,target,U,chords,arcs,path
-y_0,x_7,0,P1,-1,N W
-x_0,x_3,1,,1,E
-```
-
-`arcs` and `path` are provenance: which run of beta the disc is, and how it closed up along
-the alpha curves. They are enough to rebuild the disc's polygon exactly, which is what lets a
-disc table drawn by one implementation be redrawn by the other. **The algebra never reads
-them.**
-
-### `bordered-cfa 1` — a type-A structure
-
-```
-# bordered-cfa 1
-# name: twin-rainbow
-# iota0: y_0,y_1,y_2,y_3,y_4
-# iota1: x_0,x_1,x_2,x_3,x_4,x_5,x_6,x_7
-# count: 25
-source,target,U,chords
-y_0,x_7,0,P1
-x_0,x_3,1,
-```
-
-**The first four columns of `heegaard-discs 1`, and nothing else** — so a disc CSV *is* a CFA
-CSV with two extra columns, and `bordered` reads either. One row is one operation
-`m_{n+1}(source, a_1, ..., a_n) = U^k target` where the chord word is `a_1...a_n`; the empty
-word is `m_1 = d`. Rows are counted **mod 2**: two rows agreeing in all four columns cancel.
-
-The idempotent lines are the one thing a disc CSV does not carry explicitly. `bordered` infers
-them from the arrows (every chord pins the idempotents at its two ends, and an empty word
-forces them equal), and only falls back to the `x_`/`y_` convention for a generator that no
-arrow touches.
-
-### `bordered-cfd 1` — a type-D structure
-
-```
-# bordered-cfd 1
-# name: trefoil
-# tau: 1
-# iota0: a,b,c
-# iota1: kappa_1_1,lambda_1_1,mu_1,mu_2
-# count: 7
-source,target,chord
-a,kappa_1_1,P123
-a,mu_1,P3
-b,kappa_1_1,P1
-...
-```
-
-Exactly one chord per arrow. `delta^1(source) = rho ⊗ target`, and the arrows out of one
-generator are summed. An empty chord field would be an idempotent coefficient; the format
-allows it, `CFDhat` from a knot complex never produces one, and the box tensor rejects it
-(see the TODO — reduction is not written).
-
-### `bordered-complex 1` — a chain complex over `F_2[U]`, and `CFK^-`
-
-```
-# bordered-complex 1
-# name: trefoil
-# generators: a,b,c
-# alexander: a=-1,b=0,c=1
-# count: 2
-source,target,U
-b,a,0
-b,c,1
-```
-
-`d(source) = U^k target`, summed, mod 2. `# generators:` is needed because a generator can
-have no arrows at either end. With an `# alexander:` line the complex is a **`CFK^-`** — the
-grading is exactly the extra data that turns a chain complex into a knot complex, and it is
-what the vertical/horizontal split and `tau` are read off. Without it, it is just a complex,
-which is what the box tensor outputs.
+Five CSVs, and they are the whole coupling between the three jobs: `heegaard-diagram 1`,
+`heegaard-discs 1`, `bordered-cfa 1`, `bordered-cfd 1`, `bordered-complex 1`. The spec is
+`docs/formats.md` -- read it before touching anything that reads or writes one.
 
 ## Running things
 
+Everything below runs from the repository root, as `satellite-floer` once installed
+(`pip install -e .`) or as `python3 -m satellite_floer` without installing.
+
 ```bash
-cd bordered-py
-python3 -m bordered knots                              # the knot catalogue
-python3 -m bordered cfk trefoil                        # a knot complex, as CSV
-python3 -m bordered cfd trefoil -o trefoil.csv         # CFDhat, by Levine Thm 2.6
-python3 -m bordered cfd --cfk mine.csv                 # ... from a CFK^- you wrote
-python3 -m bordered cfa discs.csv                      # a disc table, as a CFA^-
-python3 -m bordered box discs.csv trefoil -o out.csv   # gCFK^- of the satellite
-python3 -m bordered box discs.csv t2 5                 # ... any companion in the catalogue
-python3 -m bordered box cfa.csv cfd.csv                # ... both sides from files
-python3 -m bordered check out.csv                      # d^2, and the rank at U = 1
-python3 -m unittest discover -s tests                  # 68 tests
+satellite-floer knots                              # the knot catalogue
+satellite-floer cfk trefoil                        # a knot complex, as CSV
+satellite-floer cfd trefoil -o trefoil.csv         # CFDhat, by Levine Thm 2.6
+satellite-floer cfd --cfk mine.csv                 # ... from a CFK^- you wrote
+satellite-floer cfa discs.csv                      # a disc table, as a CFA^-
+satellite-floer box discs.csv trefoil -o out.csv   # gCFK^- of the satellite
+satellite-floer box discs.csv t2 5                 # ... any companion in the catalogue
+satellite-floer box cfa.csv cfd.csv                # ... both sides from files
+satellite-floer check out.csv                      # d^2, and the rank at U = 1
 ```
 
 Both together, which is the point of the whole thing:
 
-```bash
-cd /Users/ribhu/cfa-computation
-PYTHONPATH=heegaard-py:bordered-py python3
->>> from heegaard import build, discs_to_cfa_csv
->>> from heegaard.solver import enumerate_discs
->>> from bordered import box, cfd, read_cfa
+```python
+>>> from satellite_floer.heegaard import build, discs_to_cfa_csv
+>>> from satellite_floer.heegaard.solver import enumerate_discs
+>>> from satellite_floer.bordered import box, cfd, read_cfa
 >>> d = build("hrs", 3, 1)
 >>> box(read_cfa(discs_to_cfa_csv(enumerate_discs(d), d)), cfd("trefoil"))
 ```
 
 ```bash
-cd heegaard-py
-python3 -m heegaard pattern twin-rainbow -o t.csv    # or: generate 1 2 1, or: pattern hrs 3 1
-python3 -m heegaard solve t.csv -o discs.csv         # the discs
-python3 -m heegaard solve t.csv --format=cfa         # ... as a bordered-cfa CSV
-python3 -m heegaard draw t.csv                       # svg: domain, cover, discs
-python3 -m heegaard atlas t.csv                      # svg: every disc packed, punctured, 3 sheets
-python3 -m unittest discover -s tests             # 97 tests, ~34s
+satellite-floer pattern twin-rainbow -o t.csv    # or: generate 1 2 1, or: pattern hrs 3 1
+satellite-floer solve t.csv -o discs.csv         # the discs
+satellite-floer solve t.csv --format=cfa         # ... as a bordered-cfa CSV
+satellite-floer draw t.csv                       # svg: domain, cover, discs
+satellite-floer atlas t.csv                      # svg: every disc packed, punctured, 3 sheets
+python3 -m unittest discover -s tests            # 170 tests, ~21s: 99 + 65 + 6 together
 ```
 
 ```bash
@@ -294,10 +190,10 @@ Do not rely on these in the solver. This is the data that we have found.
   homology of rank one every time -- `Q(1,2,1)` applied to the unknot has `gCFK^-` of rank 1
   with `y_4 = U y_3 = U^2 y_2`.
 
-- **2-bridge names** -- `heegaard-py/heegaard/bridge.py`. A (1,1) unknot pattern is a
+- **2-bridge names** -- `satellite_floer/heegaard/bridge.py`. A (1,1) unknot pattern is a
   2-component 2-bridge link, so it has Schubert's `b(p,q)` and Conway's `C(a_1,...,a_n)` as
   well; the `a_i` are the continued fraction of `p/q`, and ours join at `p = 2s+4|r|`,
-  `q = sign(r)(2|r|-1)`. `python3 -m heegaard bridge --hrs 3 1` prints all three. It is ONLY a
+  `q = sign(r)(2|r|-1)`. `satellite-floer bridge --hrs 3 1` prints all three. It is ONLY a
   dictionary and narrows nothing -- a test asserts `diagram.py` and `solver.py` never mention
   it, because the rest of the package takes any diagram at all and most (1,1) patterns are not
   unknot patterns. Two facts checked rather than assumed: `p` is always even, which is what
@@ -355,7 +251,7 @@ has the discs.
 
 ## What is next, in the order the user wants it
 
-1. **The algebra**, `bordered-py` -- built, and the cycle runs. Still open inside it:
+1. **The algebra**, `satellite_floer/bordered` -- built, and the cycle runs. Still open inside it:
    - **A PARTIAL BOX TENSOR.** The user wants to name one well-chosen generator of the
      `CFDhat` and one part of the `CFA`, tensor only those, argue that what comes out is a
      direct SUMMAND of the whole thing, and find the `F_2[U]` in there. This is the shape the
@@ -404,7 +300,7 @@ has the discs.
      either way. Neither change alone helps: re-spacing alone moves the jam to the top
      edge, and bowing alone with even spacing makes Q(2,2,2) cross and fall back to radial.
      Matching an arc's angle to a straight strand across the seam was tried and did not help.
-   - **The user's hand-drawn Q(i,2,2) sheets, redrawn** -- `heegaard-py/figures/qi22.py`,
+   - **The user's hand-drawn Q(i,2,2) sheets, redrawn** -- `figures/qi22.py`,
      with the six sheets transcribed as data in `figures/qi22_spec.py`: each family's source
      and target in the user's notation (i, j, k) and the cell where they drew it. Drawn at
      i=2, j=3, k=0 -- j=3 is the largest at which every j-family exists when i=2, and the
@@ -420,7 +316,7 @@ has the discs.
      `render_atlas` already has, drawing every lattice point as a hole -- the corner of the
      square is the boundary of the bordered diagram -- and `draw` should get the flag. The
      ellipse-drawing loop in `render_atlas` is the thing to lift out.
-4. **`H(r,s)` on the JS side.** Python has it (`heegaard-py/heegaard/chen.py`); JS does not.
+4. **`H(r,s)` on the JS side.** Python has it (`satellite_floer/heegaard/chen.py`); JS does not.
 5. **Integer domain multiplicity** in place of the winding-number check on completed
    candidates — the last float in the JS solver. Note the regions are faces of the
    alpha-union-beta arrangement, finer than cells, since beta cuts a cell.
@@ -430,10 +326,10 @@ independent solvers agreeing on the same CSVs is a better correctness story than
 
 ## Done, and worth not re-deriving
 
-- **The algebra package** -- `bordered-py`. The torus algebra derived from the four boundary
+- **The algebra** -- `satellite_floer/bordered`. The torus algebra derived from the four boundary
   points rather than tabulated; `CFA^-` and `CFDhat` as labelled graphs with idempotents
   inferred from the chords; `CFK^-` with the Alexander grading inferred when it is
-  determined; Levine Thm 2.6; the box tensor; three CSV formats; 68 tests. It imports nothing
+  determined; Levine Thm 2.6; the box tensor; three CSV formats; 65 tests of its own. It imports nothing
   but the standard library, and a test asserts that the string "heegaard" does not appear in
   any of its modules.
 - **A Heegaard-aware JS solver** — `heegaard-js/src/fast.js`, the default engine. Worth 2.2x
@@ -441,16 +337,16 @@ independent solvers agreeing on the same CSVs is a better correctness story than
   The real gain is that the inner loop has no geometry in it. `engine: 'generic'` keeps the
   old path and a test asserts the two agree. Verified 480/480: a piece with `k` arcs has
   exactly `k+1` crossings and each **is** the generator at that track node.
-- **The Python package** — `heegaard-py/`. Same algorithm, same answers, same two CSV formats;
+- **The Python diagrams and solver** — `satellite_floer/heegaard/`. Same algorithm, same answers, same two CSV formats;
   disc lists agree with the JS exactly on every diagram tried and `solve` emits a
   byte-identical CSV. About 9x slower than JS.
-- **Any `H(r,s)`, not just `Q(i,m,n)`** — `heegaard-py/heegaard/chen.py`. Built in Chen form on
+- **Any `H(r,s)`, not just `Q(i,m,n)`** — `satellite_floer/heegaard/chen.py`. Built in Chen form on
   the annulus, then the region is slid until `z` is at a corner, which cuts beta in `2|r|-1`
   new places — those are the new generators — and a quarter turn puts `z` top left. The re-cut
   uses real geometry on purpose: the crossing COUNT can be read off, but their ORDER along the
-  cut cannot, and the order is what fixes the diagram. `python3 report.py` writes
+  cut cannot, and the order is what fixes the diagram. `python3 figures/report.py` writes
   `out/general-diagrams.html` with every stage drawn.
-- **The SVG visualiser** — `heegaard-py/heegaard/render.py` and `python3 -m heegaard draw`:
+- **The SVG visualiser** — `satellite_floer/heegaard/render.py` and `satellite-floer draw`:
   domain, universal cover and discs, from the CSV and nothing else. Two facts worth keeping: a
   disc's polygon can be rebuilt exactly from its (source, offset, path), so a disc table
   written by the JS draws here without re-solving — verified byte-identical to drawing

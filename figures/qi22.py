@@ -1,6 +1,6 @@
 """Redraw the user's six hand-drawn Q(i,2,2) sheets from the computed disc table.
 
-    cd heegaard-py && python3 figures/qi22.py [-o out/qi22] [--i 2] [--j 3] [--k 0]
+    python3 figures/qi22.py [-o out/qi22] [--i 2] [--j 3] [--k 0]
 
 Each family on a sheet is drawn at one concrete member -- Q(i,2,2) with the given i, j, k;
 j = 3 is the largest at which every j-family on the sheets exists when i = 2, and the
@@ -19,9 +19,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from heegaard.qmn import Q                      # noqa: E402
-from heegaard.render import render_atlas        # noqa: E402
-from heegaard.solver import enumerate_discs     # noqa: E402
+from satellite_floer.heegaard.qmn import Q                # noqa: E402
+from satellite_floer.heegaard.render import render_atlas  # noqa: E402
+from satellite_floer.heegaard.solver import enumerate_discs# noqa: E402
 from qi22_spec import GROUPS, SHEETS            # noqa: E402
 
 #: the user's colours, as fills pale enough for beta to read through

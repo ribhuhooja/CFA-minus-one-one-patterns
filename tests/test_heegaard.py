@@ -8,21 +8,24 @@ import hashlib
 import unittest
 from math import gcd
 
-from heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv, diagram_to_csv,
-                      discs_from_csv, discs_to_cfa_csv, discs_to_csv, names, parameters)
-from heegaard.format import CFA_FORMAT, IDEMPOTENT_OF_CURVE
-from heegaard.diagram import Diagram, DiagramError
-from heegaard.bridge import (conway, conway_of, equivalent, inverse, mirror, name,
-                             normalise, parameters as bridge_parameters,
-                             parameters_of_conway, readings, reduced, schubert,
-                             schubert_of_conway)
-from heegaard.chen import (H, chen_form, cut_height, is_connected,
-                           main_region_winding, polyline, recut, sigma, wrapped)
-from heegaard.layout import (crossings_between, nesting, route, route_radial,
-                             stroked, strokes)
-from heegaard.render import (atlas_sheets, pack_tight, render_atlas, render_cover,
-                             render_diagram, render_discs)
-from heegaard.solver import attach_regions, enumerate_discs, reeb_chords
+from satellite_floer.heegaard import (PATTERNS, Q, build, catalogue, diagram_from_csv,
+                                      diagram_to_csv, discs_from_csv, discs_to_cfa_csv,
+                                      discs_to_csv, names, parameters)
+from satellite_floer.heegaard.format import CFA_FORMAT, IDEMPOTENT_OF_CURVE
+from satellite_floer.heegaard.diagram import Diagram, DiagramError
+from satellite_floer.heegaard.bridge import (conway, conway_of, equivalent, inverse, mirror,
+                                             name, normalise,
+                                             parameters as bridge_parameters,
+                                             parameters_of_conway, readings, reduced,
+                                             schubert, schubert_of_conway)
+from satellite_floer.heegaard.chen import (H, chen_form, cut_height, is_connected,
+                                           main_region_winding, polyline, recut, sigma,
+                                           wrapped)
+from satellite_floer.heegaard.layout import (crossings_between, nesting, route, route_radial,
+                                             stroked, strokes)
+from satellite_floer.heegaard.render import (atlas_sheets, pack_tight, render_atlas,
+                                             render_cover, render_diagram, render_discs)
+from satellite_floer.heegaard.solver import attach_regions, enumerate_discs, reeb_chords
 
 #: (i, m, n) -> (discs, sha256 of the disc csv), from heegaard-js
 EXPECTED = {
@@ -119,7 +122,7 @@ class Layout(unittest.TestCase):
                 self.assertLessEqual(max(x, y), 1 + 1e-9)
 
     def test_arcs_start_and_end_at_their_generators(self):
-        from heegaard.layout import position
+        from satellite_floer.heegaard.layout import position
         for diagram in (build("twin-rainbow"), Q(2, 2, 2)):
             for arc, path in zip(diagram.arcs, route(diagram)):
                 self.assertEqual(path[0], position(diagram, arc.a))
@@ -134,7 +137,7 @@ class Layout(unittest.TestCase):
             self.assertTrue(all(p.kind in ("line", "curve") for p in pieces))
 
     def test_strokes_start_and_end_at_their_generators(self):
-        from heegaard.layout import position
+        from satellite_floer.heegaard.layout import position
         for diagram in (build("twin-rainbow"), Q(2, 2, 2)):
             for arc, piece in zip(diagram.arcs, strokes(diagram)):
                 self.assertEqual(piece.a, position(diagram, arc.a))
@@ -161,7 +164,7 @@ class Layout(unittest.TestCase):
         """Re-spacing the generators and bowing the strands is an isotopy, so the solver must
         give exactly the same table in the tuned embedding -- and the point of it is that the
         closest strands of Q(2,2,2), at a quarter of a spacing evenly spaced, come apart."""
-        from heegaard.layout import crowding, tune_spacing
+        from satellite_floer.heegaard.layout import crowding, tune_spacing
         diagram = Q(2, 2, 2)
         plain = discs_to_csv(enumerate_discs(diagram), diagram)
         before = crowding(diagram)
@@ -192,7 +195,7 @@ class Layout(unittest.TestCase):
     def test_both_routings_give_the_same_discs(self):
         """Any embedding of the same combinatorics must do -- so this is a real check on
         the solver, not just on the drawing."""
-        import heegaard.layout as layout
+        import satellite_floer.heegaard.layout as layout
         for maker in (lambda: build("twin-rainbow"), lambda: Q(1, 2, 2), lambda: Q(2, 2, 2),
                       lambda: Q(1, 3, 2)):
             diagram = maker()
@@ -231,7 +234,7 @@ class Formats(unittest.TestCase):
 
 class Chords(unittest.TestCase):
     def test_composites_compose(self):
-        from heegaard.solver import REEB
+        from satellite_floer.heegaard.solver import REEB
         turn = {chord: pair for pair, chord in REEB.items()}
         for whole, first, last in [("rho_12", "rho_1", "rho_2"), ("rho_23", "rho_2", "rho_3"),
                                    ("rho_123", "rho_1", "rho_3")]:
@@ -760,8 +763,8 @@ class TwoBridge(unittest.TestCase):
     def test_it_narrows_nothing(self):
         """The rest of the package still takes any diagram at all -- this module only names
         the ones that happen to be unknot patterns."""
-        import heegaard.diagram as diagram
-        import heegaard.solver as solver
+        import satellite_floer.heegaard.diagram as diagram
+        import satellite_floer.heegaard.solver as solver
         for module in (diagram, solver):
             with open(module.__file__, encoding="utf-8") as handle:
                 self.assertNotIn("bridge", handle.read())
@@ -779,7 +782,7 @@ class AgainstTheJS(unittest.TestCase):
         import os
         import shutil
         import subprocess
-        root = os.path.join(os.path.dirname(__file__), "..", "..", "heegaard-js")
+        root = os.path.join(os.path.dirname(__file__), "..", "heegaard-js")
         if shutil.which("node") is None or not os.path.isdir(root):
             self.skipTest("heegaard-js or node is not here")
         done = subprocess.run(["node", "solve.js", "--quiet"], cwd=root,

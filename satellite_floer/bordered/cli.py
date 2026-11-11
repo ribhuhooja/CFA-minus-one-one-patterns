@@ -1,23 +1,25 @@
-"""Command line: pair a pattern with a companion.
+"""The algebra half of the command line: pair a pattern with a companion.
 
-    python3 -m bordered knots                            # the catalogue
-    python3 -m bordered cfk trefoil                      # a knot complex, as CSV
-    python3 -m bordered cfd trefoil -o trefoil.csv       # its type-D structure
-    python3 -m bordered cfd --cfk mine.csv               # ... from a CFK^- you wrote
-    python3 -m bordered cfa Q121-discs.csv               # a disc table, as a CFA^-
-    python3 -m bordered box Q121-discs.csv trefoil       # gCFK^- of the satellite
-    python3 -m bordered box cfa.csv cfd.csv -o out.csv   # ... with both sides from files
-    python3 -m bordered check out.csv                    # d^2, and the rank at U = 1
+    satellite-floer knots                            # the catalogue
+    satellite-floer cfk trefoil                      # a knot complex, as CSV
+    satellite-floer cfd trefoil -o trefoil.csv       # its type-D structure
+    satellite-floer cfd --cfk mine.csv               # ... from a CFK^- you wrote
+    satellite-floer cfa Q121-discs.csv               # a disc table, as a CFA^-
+    satellite-floer box Q121-discs.csv trefoil       # gCFK^- of the satellite
+    satellite-floer box cfa.csv cfd.csv -o out.csv   # ... with both sides from files
+    satellite-floer check out.csv                    # d^2, and the rank at U = 1
 
 `box` takes its second argument as a file if one exists by that name and as a knot from the
 catalogue otherwise, so ``box discs.csv t2 5`` works.  Nothing here has heard of a Heegaard
 diagram: the left-hand side is a CSV with four columns in it, and where it came from is not
-this package's business.
+this subpackage's business.
+
+``register`` adds these subcommands to the one parser in :mod:`satellite_floer.cli`, and
+``run`` carries one out; errors are left to the caller to report.
 """
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 
@@ -30,11 +32,12 @@ from .format import (read_cfa, read_cfd, read_cfk, read_complex,
 from .structures import CFA, CFD
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="bordered", description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = parser.add_subparsers(dest="command", required=True)
+COMMANDS = ("knots", "cfk", "cfd", "cfa", "box", "check")
+ERRORS = (AlgebraError,)
 
+
+def register(sub) -> None:
+    """Add the algebra subcommands to ``sub``, an argparse subparsers object."""
     sub.add_parser("knots", help="list the knot catalogue")
 
     for name, help_text in (("cfk", "write a knot complex from the catalogue"),
@@ -60,15 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("check", help="report on any file this package can read")
     c.add_argument("file", nargs="?", default=None)
 
-    args = parser.parse_args(argv)
-    try:
-        return _run(args)
-    except (AlgebraError, ValueError, OSError) as exc:
-        print(f"bordered: {exc}", file=sys.stderr)
-        return 1
 
-
-def _run(args) -> int:
+def run(args) -> int:
+    """Carry out one algebra subcommand."""
     if args.command == "knots":
         print(f"knots:\n{knots.catalogue()}", file=sys.stderr)
         return 0
@@ -154,6 +151,3 @@ def _emit(text: str, out: str | None) -> None:
     else:
         sys.stdout.write(text)
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())

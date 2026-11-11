@@ -1,26 +1,26 @@
-# heegaard-py
+# satellite_floer.heegaard
 
 Bordered Heegaard diagrams and the discs they bound, in Python. The same algorithm and the
 same answers as `heegaard-js`, reading and writing the same two CSV formats.
 
-No dependencies. Python 3.9+.
+Part of the `satellite-floer` package. No dependencies. Python 3.9+.
 
 ```bash
-python3 -m heegaard generate 2 2 2 -o Q222.csv     # a Q(i,m,n) diagram
-python3 -m heegaard pattern                        # what else can be built
-python3 -m heegaard pattern twin-rainbow -o t.csv  # ... build one by name
-python3 -m heegaard solve Q222.csv -o discs.csv    # its discs
-python3 -m heegaard solve Q222.csv --format=cfa    # ... as a bordered-cfa CSV
-cat Q222.csv | python3 -m heegaard solve           # or as a filter
-python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
-python3 -m heegaard atlas Q222.csv                 # svg: every disc, packed, in sheets
-python3 -m unittest discover -s tests
+satellite-floer generate 2 2 2 -o Q222.csv     # a Q(i,m,n) diagram
+satellite-floer pattern                        # what else can be built
+satellite-floer pattern twin-rainbow -o t.csv  # ... build one by name
+satellite-floer solve Q222.csv -o discs.csv    # its discs
+satellite-floer solve Q222.csv --format=cfa    # ... as a bordered-cfa CSV
+cat Q222.csv | satellite-floer solve           # or as a filter
+satellite-floer draw Q222.csv                  # svg: domain, cover, discs
+satellite-floer atlas Q222.csv                 # svg: every disc, packed, in sheets
+python3 -m unittest discover -s tests          # from the repository root
 ```
 
 ## Building a diagram
 
 ```python
-from heegaard import Diagram
+from satellite_floer.heegaard import Diagram
 
 d = Diagram("my diagram")
 d.add_arc(0, "left", 0, "top")          # generator, edge, generator, edge
@@ -59,7 +59,7 @@ and given a name — so it can be built, exported and solved without being re-en
 Q(i,m,n) is one entry (`qimn`); it is not privileged.
 
 ```python
-from heegaard import build, catalogue, names
+from satellite_floer.heegaard import build, catalogue, names
 
 print(catalogue())                      # every pattern and what it wants
 d = build("twin-rainbow")               # a diagram, already validated
@@ -82,20 +82,20 @@ solved for exactly this reason.
 
 ## Drawing it
 
-`python3 -m heegaard draw` writes three SVGs — one copy of the domain, the universal cover,
+`satellite-floer draw` writes three SVGs — one copy of the domain, the universal cover,
 and every disc at once — and **it takes nothing but the CSV**:
 
 ```bash
-python3 -m heegaard draw Q222.csv                    # out/Q222{,-cover,-discs}.svg
-python3 -m heegaard draw Q222.csv --discs=discs.csv  # reuse a solved disc table
-cat Q222.csv | python3 -m heegaard draw --only=cover # or as a filter
+satellite-floer draw Q222.csv                    # out/Q222{,-cover,-discs}.svg
+satellite-floer draw Q222.csv --discs=discs.csv  # reuse a solved disc table
+cat Q222.csv | satellite-floer draw --only=cover # or as a filter
 ```
 
 `--cell` sets pixels per copy of the domain, `--tiles` the size of the cover, `--limit` how
 many discs to draw (`0` for all), `--arrange=insitu` leaves discs where the enumeration found
 them instead of packing them into free slots, `--no-labels` drops the per-disc text.
 
-`python3 -m heegaard atlas Q222.csv` is the dense version: every disc, slid by whole copies
+`satellite-floer atlas Q222.csv` is the dense version: every disc, slid by whole copies
 of the domain into the lowest free place in a strip `--columns` copies wide (default 5),
 tested against the other discs' actual shapes rather than their boxes, so a thin disc sits in
 the crook of a fat one. One colour per disc, a number at its deepest point, and a key beside
@@ -167,7 +167,7 @@ fall.
 **Q(i,m,n) is H(1+2im-m, n+3m-2mn+4imn-4im-2)** — checked arc for arc on all 36 diagrams with
 `i` up to 4 and `m, n` in 2..4, and disc table for disc table on a sample. `twin-rainbow` is
 **Q(1,2,1) = H(3,1)**; H has no `n >= 2` restriction, which is the only reason that was not
-obvious. `python3 report.py` writes `out/general-diagrams.html`, which runs every check and
+obvious. `python3 figures/report.py` writes `out/general-diagrams.html`, which runs every check and
 draws each stage.
 
 ## Handing it to the algebra
@@ -195,9 +195,9 @@ number written twice —
 `p = 2s + 4|r|`, `q = sign(r)(2|r|-1)`:
 
 ```bash
-python3 -m heegaard bridge --hrs 3 1        # H(3,1) = b(14,5) = C(2,1,4)
-python3 -m heegaard bridge --schubert 14 5  # the same, from either of the others
-python3 -m heegaard bridge --conway 2 1 4
+satellite-floer bridge --hrs 3 1        # H(3,1) = b(14,5) = C(2,1,4)
+satellite-floer bridge --schubert 14 5  # the same, from either of the others
+satellite-floer bridge --conway 2 1 4
 ```
 
 It is **only a dictionary** — it narrows nothing. The solver, the visualiser and the algebra

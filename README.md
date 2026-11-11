@@ -38,34 +38,32 @@ for the evidence, which is more interesting than the code.
 |---|---|
 | **`grid-arc-js/`** | the geometry, on its own. Given a simple arc on the unit grid, find the grid path joining its endpoints whose enclosed region contains no forbidden point, or prove there is none. Knows nothing about Heegaard diagrams. |
 | **`heegaard-js/`** | jobs 1 and 2. Builds `Q(i,m,n)`, draws it, lifts beta to the universal cover, hands pieces of beta to the solver, reads off Reeb chords and `U` powers. |
-| **`heegaard-py/`** | jobs 1 and 2 again, independently, in Python — plus `H(r,s)` for any `r, s`, and an SVG visualiser that draws from the CSV and nothing else. |
-| **`bordered-py/`** | job 3. The torus algebra, `CFA^-`, `CFDhat`, `CFK^-`, the box tensor. Imports nothing from the others. |
+| **`satellite_floer/`** | the Python package, `satellite-floer` on PyPI. Two halves that do not import each other: **`heegaard/`** is jobs 1 and 2 again, independently — plus `H(r,s)` for any `r, s`, and an SVG visualiser that draws from the CSV and nothing else; **`bordered/`** is job 3, the torus algebra, `CFA^-`, `CFDhat`, `CFK^-`, the box tensor. |
 
 Two independent solvers agreeing on the same CSVs is a better correctness story than one.
 Everything new is Python.
 
 The packages share five CSV formats and nothing else — that is the whole coupling, and it is
-specified in `CLAUDE.md`. In particular the type-A structure a pattern carries is four columns
+specified in `docs/formats.md`. In particular the type-A structure a pattern carries is four columns
 (source, target, `U` power, chord word), which are the first four columns of the disc table, so
 the algebra reads a disc table directly and has still never heard of a Heegaard diagram.
 
 ## Doing things
 
 ```bash
-cd heegaard-py
-python3 -m heegaard pattern hrs 3 1 -o P.csv      # a diagram: H(3,1) = Q(1,2,1)
-python3 -m heegaard solve P.csv --format=cfa      # its discs, as a type-A structure
-python3 -m heegaard draw P.csv                    # svg: domain, universal cover, discs
-
-cd ../bordered-py
-python3 -m bordered knots                         # what companions are on the shelf
-python3 -m bordered box P-cfa.csv trefoil         # gCFK^- of the satellite
+pip install .                                 # or: python3 -m satellite_floer, from here
+satellite-floer pattern hrs 3 1 -o P.csv      # a diagram: H(3,1) = Q(1,2,1)
+satellite-floer solve P.csv -o discs.csv      # its discs
+satellite-floer draw P.csv                    # svg: domain, universal cover, discs
+satellite-floer knots                         # what companions are on the shelf
+satellite-floer box discs.csv trefoil         # gCFK^- of the satellite
+python3 -m unittest discover -s tests         # the Python tests
 ```
 
 ```python
-from heegaard import build, discs_to_cfa_csv
-from heegaard.solver import enumerate_discs
-from bordered import box, cfd, read_cfa
+from satellite_floer.heegaard import build, discs_to_cfa_csv
+from satellite_floer.heegaard.solver import enumerate_discs
+from satellite_floer.bordered import box, cfd, read_cfa
 
 diagram   = build("hrs", 3, 1)                       # H(3,1) = Q(1,2,1)
 pattern   = read_cfa(discs_to_cfa_csv(enumerate_discs(diagram), diagram))
@@ -88,9 +86,10 @@ npm test && npm run stress          # the uniqueness study
 
 ## Where things are written down
 
-- `CLAUDE.md` — the mission, the state of play, all five file formats, and the traps.
-- `bordered-py/README.md` — the torus algebra, `CFDhat` from a knot complex, the box tensor.
-- `heegaard-py/README.md` — diagrams, `H(r,s)`, the solver, and how the pictures are routed.
+- `CLAUDE.md` — the mission, the state of play, and the traps.
+- `docs/formats.md` — the five CSV formats, which are the whole coupling between the parts.
+- `docs/bordered.md` — the torus algebra, `CFDhat` from a knot complex, the box tensor.
+- `docs/heegaard.md` — diagrams, `H(r,s)`, the solver, and how the pictures are routed.
 - `heegaard-js/README.md` — the diagram conventions, the `Q(i,m,n)` arc families, the
   basepoints, how discs are counted, and the comparison against the arrow tables.
 - `grid-arc-js/README.md` — the algorithm, and what the stress tests say about uniqueness.

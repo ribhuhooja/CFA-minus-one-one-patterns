@@ -1,28 +1,30 @@
-"""Command line: build a diagram, or solve one.
+"""The diagram half of the command line: build a diagram, solve it, draw it.
 
-    python3 -m heegaard generate 2 2 2 -o Q222.csv     # a Q(i,m,n) diagram
-    python3 -m heegaard pattern                        # what else can be built
-    python3 -m heegaard pattern twin-rainbow -o t.csv  # ... build one by name
-    python3 -m heegaard solve Q222.csv -o discs.csv    # its discs
-    python3 -m heegaard solve Q222.csv                 # ... to stdout
-    cat Q222.csv | python3 -m heegaard solve           # ... or from stdin
-    python3 -m heegaard draw Q222.csv                  # svg: domain, cover, discs
-    python3 -m heegaard draw Q222.csv --discs=d.csv    # ... reusing a solved disc table
-    python3 -m heegaard atlas Q222.csv                 # every disc, packed, in sheets by kind
-    python3 -m heegaard bridge --hrs 3 1               # its names as a 2-bridge link
-    python3 -m heegaard bridge --conway 2 1 4          # ... or from either of the others
+    satellite-floer generate 2 2 2 -o Q222.csv     # a Q(i,m,n) diagram
+    satellite-floer pattern                        # what else can be built
+    satellite-floer pattern hrs 3 1 -o P.csv       # ... build one by name
+    satellite-floer solve Q222.csv -o discs.csv    # its discs
+    satellite-floer solve Q222.csv                 # ... to stdout
+    cat Q222.csv | satellite-floer solve           # ... or from stdin
+    satellite-floer draw Q222.csv                  # svg: domain, cover, discs
+    satellite-floer draw Q222.csv --discs=d.csv    # ... reusing a solved disc table
+    satellite-floer atlas Q222.csv                 # every disc, packed, in sheets by kind
+    satellite-floer bridge --hrs 3 1               # its names as a 2-bridge link
+    satellite-floer bridge --conway 2 1 4          # ... or from either of the others
 
 `generate` is Q(i,m,n) and stays that way; `pattern` reaches the whole catalogue in
-`heegaard.patterns`, of which Q is one entry.
+`satellite_floer.heegaard.patterns`, of which Q is one entry.
 
 `solve` knows nothing about Q(i,m,n): it reads whatever diagram the file describes.  That is
 the whole coupling between this and anything else -- a generator upstream and a visualiser
 downstream need only agree on the two formats.
+
+``register`` adds these subcommands to the one parser in :mod:`satellite_floer.cli`, and
+``run`` carries one out; errors are left to the caller to report.
 """
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 import time
@@ -37,10 +39,12 @@ from .qmn import Q
 from .solver import enumerate_discs
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="heegaard", description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+COMMANDS = ("generate", "pattern", "bridge", "solve", "draw", "atlas")
+ERRORS = (DiagramError,)
 
+
+def register(sub) -> None:
+    """Add the diagram subcommands to ``sub``, an argparse subparsers object."""
     generate = sub.add_parser("generate", help="write a Q(i,m,n) diagram")
     generate.add_argument("i", type=int)
     generate.add_argument("m", type=int)
@@ -93,54 +97,51 @@ def main(argv: list[str] | None = None) -> int:
                        help="leave the corners of the domain unmarked")
     atlas.add_argument("-o", "--out", default="out", help="directory for the svg files")
 
-    args = parser.parse_args(argv)
 
-    try:
-        if args.command == "generate":
-            diagram = Q(args.i, args.m, args.n)
-            text = diagram_to_csv(diagram)
-            _emit(text, args.out)
-            print(f"{diagram}", file=sys.stderr)
-            return 0
-
-        if args.command == "pattern":
-            if args.name is None:
-                print(f"patterns:\n{catalogue()}", file=sys.stderr)
-                return 0
-            diagram = build(args.name, *args.parameters)
-            _emit(diagram_to_csv(diagram), args.out)
-            print(f"{diagram}", file=sys.stderr)
-            return 0
-
-        if args.command == "bridge":
-            if args.hrs:
-                r, s = args.hrs
-            elif args.schubert:
-                r, s = twobridge.parameters(*args.schubert)
-            else:
-                r, s = twobridge.parameters_of_conway(*args.conway)
-            print(twobridge.name(r, s))
-            return 0
-
-        if args.command == "draw":
-            return _draw(args)
-
-        if args.command == "atlas":
-            return _atlas(args)
-
-        text = (open(args.diagram, encoding="utf-8").read() if args.diagram
-                else sys.stdin.read())
-        diagram = diagram_from_csv(text)
-        started = time.perf_counter()
-        discs = enumerate_discs(diagram)
-        seconds = time.perf_counter() - started
-        _emit(discs_to_csv(discs, diagram) if args.format == "discs"
-              else discs_to_cfa_csv(discs, diagram), args.out)
-        print(f"{diagram} -> {len(discs)} discs ({seconds:.2f}s)", file=sys.stderr)
+def run(args) -> int:
+    """Carry out one diagram subcommand."""
+    if args.command == "generate":
+        diagram = Q(args.i, args.m, args.n)
+        text = diagram_to_csv(diagram)
+        _emit(text, args.out)
+        print(f"{diagram}", file=sys.stderr)
         return 0
-    except (DiagramError, ValueError, OSError) as exc:
-        print(f"heegaard: {exc}", file=sys.stderr)
-        return 1
+
+    if args.command == "pattern":
+        if args.name is None:
+            print(f"patterns:\n{catalogue()}", file=sys.stderr)
+            return 0
+        diagram = build(args.name, *args.parameters)
+        _emit(diagram_to_csv(diagram), args.out)
+        print(f"{diagram}", file=sys.stderr)
+        return 0
+
+    if args.command == "bridge":
+        if args.hrs:
+            r, s = args.hrs
+        elif args.schubert:
+            r, s = twobridge.parameters(*args.schubert)
+        else:
+            r, s = twobridge.parameters_of_conway(*args.conway)
+        print(twobridge.name(r, s))
+        return 0
+
+    if args.command == "draw":
+        return _draw(args)
+
+    if args.command == "atlas":
+        return _atlas(args)
+
+    text = (open(args.diagram, encoding="utf-8").read() if args.diagram
+            else sys.stdin.read())
+    diagram = diagram_from_csv(text)
+    started = time.perf_counter()
+    discs = enumerate_discs(diagram)
+    seconds = time.perf_counter() - started
+    _emit(discs_to_csv(discs, diagram) if args.format == "discs"
+          else discs_to_cfa_csv(discs, diagram), args.out)
+    print(f"{diagram} -> {len(discs)} discs ({seconds:.2f}s)", file=sys.stderr)
+    return 0
 
 
 def _stem(name: str) -> str:
@@ -220,7 +221,3 @@ def _emit(text: str, out: str | None) -> None:
             handle.write(text)
     else:
         sys.stdout.write(text)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

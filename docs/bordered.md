@@ -1,4 +1,4 @@
-# bordered-py
+# satellite_floer.bordered
 
 The algebra half of the satellite computation. Given a type-A structure for a pattern and a
 type-D structure for a companion, it pairs them:
@@ -7,24 +7,24 @@ type-D structure for a companion, it pairs them:
 CFA^-(P, S^1 x D^2)   [x]   CFDhat(S^3 - nu(K))   =   gCFK^-(P(K))
 ```
 
-**No Heegaard diagrams anywhere in here.** The only thing this package reads from upstream is
+**No Heegaard diagrams anywhere in here.** The only thing this half reads from upstream is
 a CSV of discs, whose first four columns — source, target, power of `U`, chord word — *are*
-the type-A structure. Where those discs came from is not this package's business.
+the type-A structure. Where those discs came from is not its business.
 
-No dependencies. Python 3.9+.
+Part of the `satellite-floer` package. No dependencies. Python 3.9+.
 
 ```bash
-python3 -m bordered knots                            # the knot catalogue
-python3 -m bordered cfd trefoil -o trefoil.csv       # CFDhat of the complement
-python3 -m bordered cfa Q121-discs.csv               # a disc table, as a CFA^-
-python3 -m bordered box Q121-discs.csv trefoil       # gCFK^- of the satellite
-python3 -m bordered box cfa.csv cfd.csv -o out.csv   # ... both sides from files
-python3 -m bordered check out.csv                    # d^2, and the rank at U = 1
-python3 -m unittest discover -s tests
+satellite-floer knots                            # the knot catalogue
+satellite-floer cfd trefoil -o trefoil.csv       # CFDhat of the complement
+satellite-floer cfa Q121-discs.csv               # a disc table, as a CFA^-
+satellite-floer box Q121-discs.csv trefoil       # gCFK^- of the satellite
+satellite-floer box cfa.csv cfd.csv -o out.csv   # ... both sides from files
+satellite-floer check out.csv                    # d^2, and the rank at U = 1
+python3 -m unittest discover -s tests          # from the repository root
 ```
 
 ```python
-from bordered import box, cfd, read_cfa
+from satellite_floer.bordered import box, cfd, read_cfa
 
 pattern   = read_cfa(open("Q121-discs.csv").read())
 companion = cfd("trefoil")
@@ -178,7 +178,7 @@ Not written, and wanted — in the order that unblocks the most:
 
 ## The formats
 
-Three CSVs, specified in the repository's `CLAUDE.md`: `bordered-cfa 1`, `bordered-cfd 1`, and
+Three CSVs, specified in `docs/formats.md`: `bordered-cfa 1`, `bordered-cfd 1`, and
 `bordered-complex 1` (which with an `# alexander:` line is a `CFK^-`). `read_cfa` also accepts
 a `heegaard-discs 1` file, because the disc format's first four columns are the CFA format and
 the other two are provenance.

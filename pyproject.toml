@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "satellite-floer"
+dynamic = ["version"]
+description = "Knot Floer homology of satellites with (1,1) patterns, by bordered Floer homology"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+authors = [{ name = "Ribhu Hooja" }]
+# license: not chosen yet -- add `license = "..."` and a LICENSE file before any upload
+keywords = ["knot Floer homology", "bordered Floer homology", "satellite knots",
+            "Heegaard diagrams", "low-dimensional topology"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Source = "https://github.com/ribhuhooja/CFA-minus-one-one-patterns"
+
+[project.scripts]
+satellite-floer = "satellite_floer.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "satellite_floer.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["satellite_floer*"]

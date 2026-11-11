@@ -1,9 +1,9 @@
-"""Tests for the algebra.  Run: python3 -m unittest discover -s tests
+"""Tests for the algebra, ``satellite_floer.bordered``.
 
-The one fixture, ``twin-rainbow-cfa.csv``, was written by ``heegaard-py``'s solver from the
-diagram Q(1,2,1) = H(3,1) -- but it is checked in here as a file, and nothing in these tests
-imports ``heegaard``, which is the point: this package's whole input is four columns of CSV.
-The integration test at the bottom does import it, and skips itself if it is not installed.
+The one fixture, ``twin-rainbow-cfa.csv``, was written by the diagram half's solver from
+Q(1,2,1) = H(3,1) -- but it is checked in here as a file, and nothing in these tests imports
+``satellite_floer.heegaard``, which is the point: the algebra's whole input is four columns
+of CSV.  The tests that use both subpackages together are in ``test_together.py``.
 """
 
 import os
@@ -11,15 +11,17 @@ import subprocess
 import sys
 import unittest
 
-import bordered
-from bordered import (CFA, CFD, CFK, AlgebraError, Complex, box, knots, read_cfa, read_cfd,
-                      read_cfk, read_complex, torus, write_cfa, write_cfd, write_cfk,
-                      write_complex)
-from bordered.cfk import cfd_from_cfk, infer_alexander
-from bordered.knots import mirror
+from satellite_floer import bordered
+from satellite_floer.bordered import (CFA, CFD, CFK, AlgebraError, Complex, box, knots,
+                                      read_cfa, read_cfd, read_cfk, read_complex, torus,
+                                      write_cfa, write_cfd, write_cfk, write_complex)
+from satellite_floer.bordered.cfk import cfd_from_cfk, infer_alexander
+from satellite_floer.bordered.knots import mirror
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "twin-rainbow-cfa.csv")
+#: the subpackage's own source, wherever it was imported from
+SOURCE = os.path.dirname(os.path.abspath(bordered.__file__))
 
 #: the four test knots, and what Levine's theorem must give for each
 #: name -> (generators, tau, dim iota_0, dim iota_1)
@@ -403,20 +405,20 @@ class Formats(unittest.TestCase):
 
 class Independence(unittest.TestCase):
     def test_this_package_imports_nothing_from_heegaard(self):
-        for name in os.listdir(os.path.join(HERE, os.pardir, "bordered")):
+        for name in os.listdir(SOURCE):
             if not name.endswith(".py"):
                 continue
-            with open(os.path.join(HERE, os.pardir, "bordered", name),
+            with open(os.path.join(SOURCE, name),
                       encoding="utf-8") as handle:
                 text = handle.read()
             self.assertNotIn("heegaard", text.replace("heegaard-py", "").replace(
                 "heegaard-discs", "").replace("Heegaard", ""), name)
 
     def test_no_third_party_imports(self):
-        for name in os.listdir(os.path.join(HERE, os.pardir, "bordered")):
+        for name in os.listdir(SOURCE):
             if not name.endswith(".py"):
                 continue
-            with open(os.path.join(HERE, os.pardir, "bordered", name),
+            with open(os.path.join(SOURCE, name),
                       encoding="utf-8") as handle:
                 for line in handle:
                     if line.startswith("import ") or line.startswith("from "):
@@ -428,7 +430,7 @@ class Independence(unittest.TestCase):
 
 class CommandLine(unittest.TestCase):
     def run_it(self, *args):
-        return subprocess.run([sys.executable, "-m", "bordered", *args],
+        return subprocess.run([sys.executable, "-m", "satellite_floer", *args],
                               cwd=os.path.join(HERE, os.pardir),
                               capture_output=True, text=True)
 
@@ -452,54 +454,6 @@ class CommandLine(unittest.TestCase):
         out = self.run_it("box", FIXTURE, "not-a-knot")
         self.assertEqual(out.returncode, 1)
         self.assertIn("no knot called", out.stderr)
-
-
-# ---------------------------------------------------------------- the whole cycle
-
-HEEGAARD = os.path.join(HERE, os.pardir, os.pardir, "heegaard-py")
-
-
-@unittest.skipUnless(os.path.isdir(HEEGAARD), "heegaard-py is not beside this package")
-class WholeCycle(unittest.TestCase):
-    """Diagram -> discs -> CFA -> box, with the two packages used together.
-
-    This is the only test that imports ``heegaard``, and it is the reason the packages are
-    independent rather than separate: they can be used in one session, they just do not
-    depend on each other.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        sys.path.insert(0, os.path.abspath(HEEGAARD))
-
-    def cfa_of(self, r, s):
-        from heegaard import build, discs_to_cfa_csv
-        from heegaard.solver import enumerate_discs
-        diagram = build("hrs", r, s)
-        return read_cfa(discs_to_cfa_csv(enumerate_discs(diagram), diagram))
-
-    def test_H_r_s_through_to_the_satellite(self):
-        # Q(i,m,n) = H(1 + 2im - m, n + 3m - 2mn + 4imn - 4im - 2)
-        for i, m, n in [(1, 2, 1), (1, 2, 2), (1, 3, 2)]:
-            r, s = 1 + 2 * i * m - m, n + 3 * m - 2 * m * n + 4 * i * m * n - 4 * i * m - 2
-            a = self.cfa_of(r, s)
-            for name in ("unknot", "trefoil", "figure-eight"):
-                c = box(a, knots.cfd(name))
-                self.assertTrue(c.is_a_complex(), (i, m, n, name))
-                self.assertEqual(c.homology_rank_at_U1(), 1, (i, m, n, name))
-
-    def test_the_fixture_is_what_the_solver_still_produces(self):
-        a = self.cfa_of(3, 1)
-        a.name = "twin-rainbow"          # H(3,1) is the same diagram under its other name
-        with open(FIXTURE, encoding="utf-8") as handle:
-            self.assertEqual(write_cfa(a), handle.read())
-
-    def test_both_ways_of_writing_the_cfa_agree(self):
-        from heegaard import build, discs_to_cfa_csv
-        from heegaard.solver import enumerate_discs
-        diagram = build("twin-rainbow")
-        theirs = discs_to_cfa_csv(enumerate_discs(diagram), diagram)
-        self.assertEqual(write_cfa(read_cfa(theirs)), theirs)
 
 
 if __name__ == "__main__":

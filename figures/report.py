@@ -1,6 +1,6 @@
 """Build the general-diagram report: H(r,s) from Chen form to finished diagram.
 
-    python3 report.py            # writes out/general-diagrams.html
+    python3 figures/report.py    # writes out/general-diagrams.html
 
 Everything in the page is computed here and now -- the checks are run, not quoted.
 """
@@ -9,14 +9,19 @@ from __future__ import annotations
 
 import html
 import os
+import sys
 
-from heegaard import Q, build, diagram_from_csv, diagram_to_csv
-from heegaard.chen import (H, chen_form, cut_height, is_connected, main_region_winding,
-                           recut, rotate_ccw, sigma)
-from heegaard.format import discs_to_csv
-from heegaard.layout import stroked
-from heegaard.render import render_chen, render_diagram
-from heegaard.solver import enumerate_discs
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from satellite_floer.heegaard import (Q, build, diagram_from_csv,         # noqa: E402
+                                      diagram_to_csv)
+from satellite_floer.heegaard.chen import (H, chen_form, cut_height,      # noqa: E402
+                                           is_connected, main_region_winding, recut,
+                                           rotate_ccw, sigma)
+from satellite_floer.heegaard.format import discs_to_csv                  # noqa: E402
+from satellite_floer.heegaard.layout import stroked                       # noqa: E402
+from satellite_floer.heegaard.render import render_chen, render_diagram   # noqa: E402
+from satellite_floer.heegaard.solver import enumerate_discs               # noqa: E402
 
 CELL = 380
 

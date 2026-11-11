@@ -8,4 +8,14 @@ heegaard-js/analyse.js
 heegaard-js/shapes.js
 
 node_modules/
+__pycache__/
+
+# python packaging output
+*.egg-info/
+build/
+dist/
+
 .DS_Store
+
+# personal notes, not part of the project
+TODO.md
